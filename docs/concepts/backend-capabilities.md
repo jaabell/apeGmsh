@@ -116,6 +116,11 @@ are unaffected and run on any build.
   `equationConstraint` (EQ_Constraint, ADR 0068). Fork-only **for the live
   run**. On stock, use `enforce="penalty"` with a tuned `stiffness` — see
   [Tie non-matching meshes](../how-to/tie-meshes.md).
+- **`ops.equation_constraint(...)`** — a hand-written `equationConstraint` row
+  (`constrained=(node, dof)`, `retained=[(node, dof, coef), ...]`). Same
+  rules as an equation tie: fork-only for the live run, `Lagrange` /
+  `LadrunoProjection` auto-emitted, `Transformation` refused, serial only, and
+  not archived by `ops.h5(...)`.
 - **Contact.** `g.constraints.contact(...)` → `contactSurface` / `contact`, and
   `g.constraints.contact_plane(...)` → `contactPlane` (rigid analytical plane).
   Both lanes work in 2D as well as 3D, and both are **serial only** — parallel
@@ -141,6 +146,13 @@ are unaffected and run on any build.
 `LadrunoBondSlip`, `LadrunoCohesiveHinge`, `LadrunoCohesiveHingeBiaxial`,
 `LadrunoConcrete3D`, `LadrunoJ2`, `LadrunoJ2Finite`, `LadrunoRCConcrete`,
 `LadrunoRCFiniteStrain`, `LadrunoRebarBuckling`, `LadrunoUniaxialJ2`
+
+`LadrunoConcrete3D`'s `tension_law=` / `eps_fc=` / `gc_legacy=` need fork
+build `1334d1e24` or later, and `flow_potential=` needs `916576661`. An older
+build refuses the material (`unknown option`) rather than ignoring them. The
+same `1334d1e24` commit changed the defaults (bilinear tension law, `Gc` read
+as a compressive fracture energy), so a deck that sets none of them means
+different things on either side of it; pin `tension_law` when that matters.
 
 The vanilla `DruckerPrager` runs on any build, but its tension-cutoff
 return map is only correct from fork build `61b3efa04` on (fork ADR-95).
