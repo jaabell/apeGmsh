@@ -14,6 +14,21 @@
      guards the duplicated-header mangling and this comment's position.
      Workflow + rationale: internal_docs/changelog_workflow.md -->
 
+### FIXED — recorder-spec messages point at the real in-process capture route; `ResolvedRecorderRecord` accepts list IDs
+
+- The `emit_recorders` refusals and warnings (modal records raise,
+  fiber/layer records warn-and-skip), the `LiveRecorders` module
+  docstring, the gauss-strain `.out` warning in `results/spec/_emit.py`,
+  and the `emit_recorders` docstring named `spec.capture(...)` and
+  `apeGmsh.results.spec.Recorders`. Phase 9 deleted both. They now name
+  `ops.domain_capture(DomainCaptureSpec(opensees=ops), path=...)`, with
+  `DomainCapture.capture_modes(n)` for modes, and `spec.emit_mpco(...)`.
+- `ResolvedRecorderRecord` coerces `node_ids` / `element_ids` to an
+  ndarray. A list such as `fem.nodes.select(...).ids` used to crash
+  emit with `AttributeError: 'list' object has no attribute 'size'`.
+- `ResolvedRecorderSpec.emit_recorders` / `emit_mpco` carry return
+  annotations (`LiveRecorders` / `LiveMPCO`).
+
 ### REMOVED — dead `g.node_ndf` populator in the FEM factory
 
 `mesh/_fem_factory.py` still carried `_populate_node_ndf` /
