@@ -14,6 +14,21 @@
      guards the duplicated-header mangling and this comment's position.
      Workflow + rationale: internal_docs/changelog_workflow.md -->
 
+### FIXED — 2-D `geomTransf` Tcl decks no longer carry a `vecxz` (every beam was silently dropped)
+
+`ops.geomTransf.Linear/PDelta/Corotational(vecxz=...)` on an `ndm=2`
+bridge wrote `geomTransf Linear 1 0.0 0.0 1.0`. OpenSees' Tcl 2-D
+`geomTransf` accepts only `tag <-jntOffset ...>`, so the line failed with
+"bad command" and every element referencing it was never built. The
+interpreter still exits 0, and in-process openseespy ignores the extra
+args, which is why no run caught it. The build pipeline now emits the bare
+`geomTransf <Type> <tag>` whenever `ndm == 2`: a `vecxz` along global Z (the
+only direction a 2-D model can mean) is dropped, and any other vector
+raises `BridgeError` at emit, matching the existing 2-D `orientation=`
+refusal. The docs and tutorials that passed `vecxz=(0.0, 0.0, 1.0)` in
+2-D models now call `ops.geomTransf.Linear()`, and the skill states the
+2-D rule. Guarded by `tests/opensees/integration/test_geomtransf_2d_vecxz.py`.
+
 ### FIXED — a chain-phase declaration the router rejects is no longer stored; `clear()` fails loud in a `from_h5` session
 
 In a `from_h5` / compose session, `_declare` appended the def to its
