@@ -12,7 +12,8 @@ in the comment block directly above it:
     # apegmsh-lint: <rule>-ok <reason>
 
 The reason is mandatory, and a waiver that no longer suppresses anything
-is itself a finding. `adr-number` has no waiver: a collision is never right.
+is itself a finding. The repo-level rules `adr-number` and `doc-path` have no
+waiver: a collision is never right, and a dead citation is fixed in the doc.
 
     python scripts/check_quirks.py              # this checkout
     python scripts/check_quirks.py --root DIR   # another tree, e.g. a `git archive`
@@ -30,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import fnmatch
 import gc
 import io
 import re
@@ -78,6 +80,38 @@ IMPORT_TEXT = re.compile(
     r"|\b(?:import_module|__import__)\(\s*[rbu]?['\"]openseespy\b"
 )
 
+#: The agent-facing docs whose citations must resolve: AGENTS.md, the task
+#: guides (not the derived user-skill mirror) and the non-ADR architecture
+#: docs. ADRs are append-only history and stay out.
+AGENTS = Path("AGENTS.md")
+SKILLS = Path(".claude/skills")
+DERIVED_SKILL = "apegmsh-helper"
+ARCHITECTURE = Path("src/apeGmsh/opensees/architecture")
+#: Historical plan docs (May 2026) whose citations were true when written; link N3 (#1197)
+#: deletes them and removes this exclusion.
+HISTORICAL_DOCS = ("phase-*.md", "*-scope.md", "plan_*.md")
+#: Where a backticked path may be rooted, after the doc's own folder: the
+#: repo, `src`, the package, the bridge and the architecture folder are the
+#: shorthands the docs use (`mesh/FEMData.py`, `emitter/h5.py`, `decisions/README.md`).
+#: A Markdown link resolves only against the doc's folder, as a renderer does.
+DOC_BASES = (Path("."), Path("src"), Path("src/apeGmsh"), Path("src/apeGmsh/opensees"), ARCHITECTURE)
+DOC_EXTENSIONS = r"(?:py|md|json|toml|yml|yaml)"
+#: `x/y.py`, `x/y.md`, ... in backticks, with whatever follows the path up to the
+#: closing backtick (SUFFIX reads it). A slash is required: a bare file name is
+#: not a citation the rule can place.
+CITATION = re.compile(r"`(?P<path>[^`\s]*/[^`\s]*?\." + DOC_EXTENSIONS + r")(?P<suffix>[^`]*)`")
+#: What may follow a cited path: nothing, `:line`, `:first-last`, `#Lnn`, or
+#: `::symbol` (optionally `symbol()`, a `Class.member`, a glob, or several
+#: separated by ` / `). Every symbol must be defined in that file; anything
+#: else is unreadable and a finding, so no citation escapes the check.
+SYMBOL = r"[\w.*]+(?:\(\))?"
+SUFFIX = re.compile(
+    r"^(?::\d+(?:-\d+)?|#L\d+(?:-L?\d+)?|::(?P<symbols>" + SYMBOL + r"(?:\s*/\s*" + SYMBOL + r")*))?$"
+)
+MD_LINK = re.compile(r"\]\((?P<path>[^)#\s]+?\." + DOC_EXTENSIONS + r")(?:#[^)]*)?\)")
+#: Not a repo path: a URL, a home or Windows path, a placeholder or a glob.
+NOT_A_PATH = re.compile(r"^(?:https?:|~|[A-Za-z]:[\\/])|[*{}<>\[\]$]")
+
 #: The package the getattr rules read and index, and the ratchet of sites that
 #: predate them (one `path::name` per line, `#` comments; a stale line is a finding).
 GETATTR_SCOPE = "src/apeGmsh/"
@@ -120,6 +154,15 @@ RULES: dict[str, str] = {
         "apeGmsh.opensees.emitter.live.get_ops(). Lesson: DomainCapture sampled an empty "
         "domain (fixed 9ffe6aa2, which kept the import as its fallback); that fallback, "
         "LiveMPCO, LiveRecorders, interop.solve and the arch-pushover example still bound it"
+    ),
+    "doc-path": (
+        "an agent-facing doc cites a path or symbol that does not exist, so the reader "
+        "is sent to a file that moved or a name that was renamed and reads the doc as "
+        "current anyway. Cite the current path (from the doc's folder, the repo root, "
+        "src, src/apeGmsh, src/apeGmsh/opensees or the architecture folder), or drop the "
+        "backticks from a reference that names nothing in this repo. Lesson: docs lag the "
+        "source (AGENTS.md, 'What this repo is'); the 2026-09-28 panel found 11% of the "
+        "paths these docs cite dead (#1192 P6, #1197 N1)"
     ),
     "getattr-private": (
         "getattr/hasattr with a literal _private name on an object that is not self or cls, "
@@ -205,6 +248,171 @@ def check_adr_numbers(root: Path) -> list[Finding]:
                     Finding(f"{rel}/README.md", 0, "adr-number",
                             f"the index is {detail}. " + RULES["adr-number"])
                 )
+    return findings
+
+
+# --- doc-path ---------------------------------------------------------------
+
+
+def _agent_docs(root: Path) -> list[Path]:
+    docs = [root / AGENTS] if (root / AGENTS).is_file() else []
+    docs += sorted(
+        p for p in (root / SKILLS).glob("apegmsh-*/SKILL.md") if p.parent.name != DERIVED_SKILL
+    )
+    docs += sorted(  # not decisions/: ADRs are history
+        p for p in (root / ARCHITECTURE).glob("*.md")
+        if not any(fnmatch.fnmatch(p.name, pattern) for pattern in HISTORICAL_DOCS)
+    )
+    return docs
+
+
+_SCOPE_BLOCKS = (ast.If, ast.Try, ast.With, ast.For, ast.While)
+_DEFS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+#: A module's top-level names, and each top-level class's members.
+Names = tuple[set[str], dict[str, set[str]]]
+
+
+def _scope_statements(body: list[ast.stmt]) -> Iterator[ast.stmt]:
+    """The statements that bind names in one scope: its own, and those inside its
+    `if`/`try`/`with`/loops (a guarded import or def still binds there). Never
+    the bodies of functions or classes, which are scopes of their own."""
+    for stmt in body:
+        yield stmt
+        if isinstance(stmt, _SCOPE_BLOCKS):
+            nested = [*stmt.body, *getattr(stmt, "orelse", [])]
+            if isinstance(stmt, ast.Try):
+                nested += [*stmt.finalbody, *(s for h in stmt.handlers for s in h.body)]
+            yield from _scope_statements(nested)
+
+
+def _bound_names(stmt: ast.stmt) -> set[str]:
+    """The names one statement binds in its scope: a def, a class, an assignment
+    (plain, annotated or tuple-unpacked) or an import, aliases included."""
+    if isinstance(stmt, _DEFS):
+        return {stmt.name}
+    if isinstance(stmt, ast.Assign):
+        return {n.id for t in stmt.targets for n in _target_names(t)}
+    if isinstance(stmt, ast.AnnAssign):
+        return {n.id for n in _target_names(stmt.target)}
+    if isinstance(stmt, ast.Import):
+        return {a.asname or a.name.split(".")[0] for a in stmt.names}
+    if isinstance(stmt, ast.ImportFrom):
+        return {a.asname or a.name for a in stmt.names}
+    return set()
+
+
+def _target_names(target: ast.expr) -> list[ast.Name]:
+    if isinstance(target, ast.Name):
+        return [target]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return [n for elt in target.elts for n in _target_names(elt)]
+    return []
+
+
+def _class_members(cls: ast.ClassDef) -> set[str]:
+    """Methods, class-level assignments and nested classes, plus every
+    `self.<member> = ...` inside the class's own methods."""
+    members: set[str] = set()
+    for stmt in _scope_statements(cls.body):
+        members |= _bound_names(stmt)
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for node in ast.walk(stmt):
+                targets = node.targets if isinstance(node, ast.Assign) else (
+                    [node.target] if isinstance(node, ast.AnnAssign) else [])
+                for target in targets:
+                    if (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                            and target.value.id == "self"):
+                        members.add(target.attr)
+    return members
+
+
+def _module_names(path: Path, cache: dict[Path, Names | None]) -> Names | None:
+    """A module's top-level names and its classes' members; None if it does not parse."""
+    if path not in cache:
+        source = _read_source(path)
+        try:
+            tree = ast.parse(source or "", filename=str(path)) if source is not None else None
+        except SyntaxError:
+            tree = None
+        names: Names | None = None
+        if tree is not None:
+            top: set[str] = set()
+            classes: dict[str, set[str]] = {}
+            for stmt in _scope_statements(tree.body):
+                top |= _bound_names(stmt)
+                if isinstance(stmt, ast.ClassDef):
+                    classes[stmt.name] = _class_members(stmt)
+            names = (top, classes)
+        cache[path] = names
+    return cache[path]
+
+
+def _symbol_missing(symbol: str, names: Names) -> str | None:
+    """Why `symbol` is not defined by a module with `names`; None if it is.
+
+    One part is a top-level name; `Class.member` is a member of a top-level
+    class; a `*` is a glob over the candidates. Deeper paths are not read."""
+    top, classes = names
+    parts = symbol.removesuffix("()").split(".")
+    if len(parts) == 1:
+        candidates, where = top, "at the top level"
+    elif len(parts) == 2 and parts[0] in classes:
+        candidates, where = classes[parts[0]], f"in class {parts[0]}"
+    elif len(parts) == 2:
+        return f"has no class `{parts[0]}`"
+    else:
+        return f"cannot be checked for `{symbol}`: cite a top-level name or `Class.member`"
+    if not fnmatch.filter(candidates, parts[-1]):
+        return f"defines no `{parts[-1]}` {where}"
+    return None
+
+
+def _resolve_citation(cited: str, doc: Path, root: Path, link: bool) -> Path | None:
+    bases = [doc.parent] if link else [doc.parent, *(root / base for base in DOC_BASES)]
+    for base in bases:
+        candidate = base / cited
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def check_doc_paths(root: Path) -> list[Finding]:
+    """Every backticked repo path and relative Markdown link in the agent-facing
+    docs resolves, its suffix is one SUFFIX reads, and each `::symbol` is a
+    top-level name or `Class.member` of that file (AST).
+
+    A path with no slash, a URL, a placeholder or a glob is not a citation and
+    passes. A `.py` file a symbol points into that does not parse is a finding.
+    """
+    findings: list[Finding] = []
+    cache: dict[Path, Names | None] = {}
+    for doc in _agent_docs(root):
+        rel = doc.relative_to(root).as_posix()
+        for number, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), 1):
+            cited = [(m.group("path"), m.group("suffix"), False) for m in CITATION.finditer(line)]
+            cited += [(m.group("path"), "", True) for m in MD_LINK.finditer(line)]
+            for path, suffix, link in cited:
+                if NOT_A_PATH.search(path):
+                    continue
+                problems: list[str] = []
+                target = _resolve_citation(path, doc, root, link)
+                read = SUFFIX.match(suffix)
+                if target is None:
+                    problems.append(f"`{path}` does not resolve")
+                if read is None:
+                    problems.append(f"`{path}{suffix}`: unreadable suffix `{suffix}`; cite "
+                                    "`:line`, `:first-last`, `#Lnn` or `::symbol`")
+                elif target is not None and read.group("symbols") and target.suffix == ".py":
+                    names = _module_names(target, cache)
+                    for symbol in re.split(r"\s*/\s*", read.group("symbols")):
+                        if names is None:
+                            problems.append(f"`{path}` does not parse, so `::{symbol}` "
+                                            "cannot be checked")
+                        elif (why := _symbol_missing(symbol, names)) is not None:
+                            problems.append(f"`{path}` {why}")
+                findings += [Finding(rel, number, "doc-path", f"{why}. " + RULES["doc-path"])
+                             for why in problems]
     return findings
 
 
@@ -687,7 +895,7 @@ def _scan(root: Path) -> list[Finding]:
     for cache in (_sites_cache, _probe_cache, _tree_cache):
         for key in [k for k in cache if k[0] == root]:
             del cache[key]
-    findings = check_adr_numbers(root)
+    findings = check_adr_numbers(root) + check_doc_paths(root)
     for path in _python_files(root):
         findings.extend(scan_file(path, path.relative_to(root).as_posix(), root))
     findings.extend(_stale_baseline(root))

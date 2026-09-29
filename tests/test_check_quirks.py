@@ -660,3 +660,153 @@ def test_an_undecodable_file_is_skipped_not_fatal(tmp_path: Path) -> None:
     _raw(tmp_path, RESOLVER, b"# caf\xe9\nx = 1\n")
     _write(tmp_path, FACTORY, _SWALLOW)
     assert _found(tmp_path) == ["resolve-swallow:_fem_factory.py:4"]
+
+
+# --- doc-path: the panel's 11% dead citations (#1192 P6, #1197 N1) ------------
+
+ARCH = "src/apeGmsh/opensees/architecture"
+GUIDE = ".claude/skills/apegmsh-bridge-feature/SKILL.md"
+MODULE = "def emit_mp_constraints(b):\n    pass\n\nclass _StageBuilder:\n    def stage_open(self):\n        pass\n"
+
+
+def _doc(root: Path, rel: str, *lines: str) -> None:
+    _write(root, rel, "\n".join(lines) + "\n")
+
+
+def _doc_paths(root: Path) -> list[str]:
+    return [f"{Path(f.path).name}:{f.line}" for f in quirks.scan(root) if f.rule == "doc-path"]
+
+
+def test_doc_path_passes_citations_that_resolve(tmp_path: Path) -> None:
+    _write(tmp_path, "src/apeGmsh/opensees/_internal/build.py", MODULE)
+    _write(tmp_path, "src/apeGmsh/mesh/FEMData.py", FEMDATA)
+    _doc(tmp_path, f"{ARCH}/testing.md", "# t")
+    _doc(tmp_path, f"{ARCH}/decisions/README.md", "# ADRs")
+    _doc(tmp_path, "AGENTS.md",
+         "See [testing.md](src/apeGmsh/opensees/architecture/testing.md) and `mesh/FEMData.py`.",
+         "Lift `_internal/build.py::emit_mp_constraints`; `_internal/build.py::_StageBuilder.stage_open`",
+         "and `src/apeGmsh/opensees/_internal/build.py:12` (a line is not checked).",
+         "Not paths: `~/venv/x.py`, `C:\\venv\\x.py`, `ranks/rank<K>.yml`, `tests/**/*.py`,",
+         "`https://x.org/a.md`, `{name}/fields.json`, and a bare `build.py`.")
+    _doc(tmp_path, GUIDE, "`decisions/README.md`, `opensees/_internal/build.py`, [t](../../../AGENTS.md)")
+    assert _doc_paths(tmp_path) == []
+
+
+def test_doc_path_flags_a_path_that_does_not_resolve(tmp_path: Path) -> None:
+    _doc(tmp_path, "AGENTS.md", "Read `scripts/nav.py` first.", "Then `viewers/ui/viewer_window.py`.")
+    assert _doc_paths(tmp_path) == ["AGENTS.md:1", "AGENTS.md:2"]
+
+
+def test_doc_path_flags_a_markdown_link_only_relative_to_the_doc(tmp_path: Path) -> None:
+    # A renderer resolves a link from the doc's folder, never from the package roots.
+    _doc(tmp_path, f"{ARCH}/testing.md", "# t")
+    _doc(tmp_path, f"{ARCH}/h5-schema.md", "([README](../../../README.md)) and [t](testing.md)")
+    _doc(tmp_path, "README.md", "# r")
+    assert _doc_paths(tmp_path) == ["h5-schema.md:1"]
+
+
+def test_doc_path_flags_a_symbol_the_file_does_not_define(tmp_path: Path) -> None:
+    _write(tmp_path, "src/apeGmsh/opensees/emitter/h5.py", MODULE)
+    _doc(tmp_path, f"{ARCH}/_DEFERRED.md", "lift touches `emitter/h5.py::_write_mp_constraints`,",
+         "and `emitter/h5.py::emit_mp_constraints` (still there).")
+    found = quirks.scan(tmp_path)
+    assert [f"{f.rule}:{f.line}" for f in found] == ["doc-path:1"]
+    assert "defines no `_write_mp_constraints`" in found[0].message
+
+
+def test_doc_path_flags_a_symbol_into_a_file_that_does_not_parse(tmp_path: Path) -> None:
+    _write(tmp_path, "src/apeGmsh/x.py", "def (:\n")
+    _doc(tmp_path, "AGENTS.md", "`src/apeGmsh/x.py::f`")
+    assert _doc_paths(tmp_path) == ["AGENTS.md:1"]
+
+
+def test_doc_path_ignores_the_adrs_and_the_derived_skill_mirror(tmp_path: Path) -> None:
+    _doc(tmp_path, f"{ARCH}/decisions/0001-x.md", "`src/apeGmsh/gone.py` was the plan.")
+    _doc(tmp_path, ".claude/skills/apegmsh-helper/SKILL.md", "`src/apeGmsh/gone.py`")
+    _doc(tmp_path, ".claude/skills/apegmsh-helper/references/x.md", "`src/apeGmsh/gone.py`")
+    _doc(tmp_path, "internal_docs/plan_x.md", "`src/apeGmsh/gone.py`")
+    assert _found(tmp_path) == []
+
+
+def test_doc_path_cannot_be_waived(tmp_path: Path) -> None:
+    _write(tmp_path, "tests/test_a.py", "# apegmsh-lint: doc-path-ok because\nx = 1\n")
+    assert _found(tmp_path) == ["waiver:test_a.py:1"]
+
+
+def test_doc_path_scope_exists_in_this_checkout() -> None:
+    # A moved doc folder turns the rule off silently (N3 moves architecture/ out of src/).
+    assert (quirks.REPO / quirks.AGENTS).is_file()
+    assert any((quirks.REPO / quirks.SKILLS).glob("apegmsh-*/SKILL.md")), "the task guides moved"
+    assert any((quirks.REPO / quirks.ARCHITECTURE).glob("*.md")), "architecture/ moved: update ARCHITECTURE"
+
+
+def test_doc_path_skips_the_historical_plan_docs(tmp_path: Path) -> None:
+    # May-2026 scope/plan docs cite the layout of their day; N3 deletes them.
+    for name in ("phase-8-untangle.md", "phase-8.3b-scope.md", "mp-tag-tracking-scope.md", "plan_x.md"):
+        _doc(tmp_path, f"{ARCH}/{name}", "`mesh/records/_kinds.py` moves.")
+    _doc(tmp_path, f"{ARCH}/_DEFERRED.md", "`mesh/records/_kinds.py` moves.")
+    assert _doc_paths(tmp_path) == ["_DEFERRED.md:1"]
+
+
+# --- doc-path: the review of #1236 (suffix forms escaped; `::symbol` was loose) ---
+
+SCOPED = '''\
+import a.b
+from x import y as Alias
+try:
+    import z
+except ImportError:
+    z = None
+p, q = 1, 2
+
+def test_geom_2d():
+    some_local = 1
+    return some_local
+
+class Cls:
+    CONST = 1
+    def __init__(self):
+        self.attr = 0
+    def method(self):
+        pass
+'''
+
+
+def test_doc_path_checks_the_file_under_every_suffix_form(tmp_path: Path) -> None:
+    # `:10-20`, `::foo()` and `#L3` used to fail the regex, so the file went unchecked too.
+    _doc(tmp_path, "AGENTS.md", "`scripts/gone.py:10-20`", "`scripts/gone.py::foo()`", "`scripts/gone.py#L3`",
+         "`scripts/gone.py:7`", "`scripts/gone.py#L3-L9`", "`scripts/gone.py::a / b`")
+    assert _doc_paths(tmp_path) == [f"AGENTS.md:{n}" for n in range(1, 7)]
+
+
+def test_doc_path_reads_every_suffix_form_on_a_real_file(tmp_path: Path) -> None:
+    _write(tmp_path, "x/real.py", SCOPED)
+    _doc(tmp_path, "AGENTS.md", "`x/real.py:10-20` `x/real.py:7` `x/real.py#L3` `x/real.py#L3-L9`",
+         "`x/real.py::Cls.method()` `x/real.py::Cls.method / Cls.attr` `x/real.py::test_geom_*`")
+    assert _doc_paths(tmp_path) == []
+
+
+def test_doc_path_flags_an_unreadable_suffix(tmp_path: Path) -> None:
+    _write(tmp_path, "x/real.py", SCOPED)
+    _doc(tmp_path, "AGENTS.md", "`x/real.py and friends`", "`x/real.py:abc`", "`x/real.py::Cls.*`")
+    found = quirks.scan(tmp_path)
+    assert [f.line for f in found] == [1, 2]
+    assert "unreadable suffix ` and friends`" in found[0].message
+
+
+def test_doc_path_resolves_a_symbol_in_its_scope(tmp_path: Path) -> None:
+    _write(tmp_path, "x/real.py", SCOPED)
+    _doc(tmp_path, "AGENTS.md",
+         "`x/real.py::Alias` `x/real.py::a` `x/real.py::z` `x/real.py::q` `x/real.py::Cls.CONST`",
+         "`x/real.py::Cls.attr` `x/real.py::Cls.__init__` `x/real.py::test_geom_2d`",
+         "`x/real.py::some_local`",   # a function-local name is not a module name
+         "`x/real.py::Nope.method`",  # no such class
+         "`x/real.py::Cls.missing`",
+         "`x/real.py::a.b.c`",        # deeper than Class.member: not read
+         "`x/real.py::attr`")         # an instance attribute is not top-level
+    found = quirks.scan(tmp_path)
+    assert [f.line for f in found] == [3, 4, 5, 6, 7]
+    assert "defines no `some_local` at the top level" in found[0].message
+    assert "has no class `Nope`" in found[1].message
+    assert "defines no `missing` in class Cls" in found[2].message
+    assert "cannot be checked for `a.b.c`" in found[3].message
