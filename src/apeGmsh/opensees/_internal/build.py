@@ -132,8 +132,11 @@ __all__ = [
     "validate_body_force_double_count",
     "validate_from_model_cases",
     "validate_load_basis_vs_elements",
+    "validate_model_definition_consumed",
+    "fix_records_from_model",
     "make_auto_stiffness_resolver",
     "AUTO_STIFFNESS_ALPHA",
+    "UnconsumedModelDefinitionWarning",
     "WarnBodyForceDoubleCount",
     "WarnLoadBasisMismatch",
     "infer_node_ndf",
@@ -4659,6 +4662,247 @@ def validate_from_model_cases(
         f"{available or '(none)'}.  Pass "
         f"from_model(case, allow_empty=True) to permit a deliberately "
         f"empty import.{hint}"
+    )
+
+
+class UnconsumedModelDefinitionWarning(UserWarning):
+    """The model defines supports or masses that the deck never emits.
+
+    ``g.constraints.bc(...)`` (and a zero-valued ``g.displacements``)
+    resolve into homogeneous SP records on ``fem.nodes.sp``;
+    ``g.masses.*`` resolve into ``fem.nodes.masses``.  The bridge emits
+    neither on its own (ADR 0051 §4): a deck carries them only when it
+    restates them — ``ops.fix`` / ``s.fix`` / ``s.support`` /
+    ``ops.fix_from_model()`` for the supports, ``ops.mass`` /
+    ``s.mass`` / ``ops.mass_from_model()`` for the masses.  A deck that
+    restates none of them runs unsupported and massless with no error.
+    Filter this category for a deck that leaves them out on purpose.
+    """
+
+
+def _record_node_ids(
+    fem: "FEMData", rec: "FixRecord | SupportRecord | MassRecord",
+) -> "Iterable[int]":
+    """The node ids a ``pg`` XOR ``nodes`` bridge record targets."""
+    if rec.nodes is not None:
+        return rec.nodes
+    return expand_pg_to_nodes(fem, rec.pg) if rec.pg is not None else ()
+
+
+def _sp_deck_dof(spatial_dof: int, node_ndf: int, ndm: int) -> "int | None":
+    """Deck DOF (1-based) carrying a broker SP's spatial component.
+
+    Broker SP records index the spatial vector ``(ux, uy, uz, rx, ry,
+    rz)`` (``g.constraints.bc``'s mask, ``g.displacements``' ``dofs``);
+    a deck ``fix`` mask is positional over the node's DOFs.  The two
+    agree only in 3-D; a 2-D frame (``ndm=2, ndf=3``) carries ``rz`` at
+    DOF 3, so this maps through :func:`_load_dof_layout`, the layout the
+    load path uses.  ``None`` when the node has no DOF for the component
+    (``uz`` on any 2-D node, rotations on a solid).
+    """
+    layout = _load_dof_layout(int(node_ndf), int(ndm))
+    idx = int(spatial_dof) - 1
+    return layout.index(idx) + 1 if idx in layout else None
+
+
+def _stacklevel_outside_package() -> int:
+    """``stacklevel`` naming the first caller outside ``apeGmsh``.
+
+    Emit is reached at varying depths (``ops.tcl`` -> ``emit``, a direct
+    ``ops.build().emit(...)``, the live runners), so a fixed stacklevel
+    lands inside the bridge.  Counted from the ``warnings.warn`` call
+    in this module's caller.
+    """
+    import inspect
+    import os
+
+    pkg = os.path.normcase(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))) + os.sep
+    frame = inspect.currentframe()
+    level = 1
+    try:
+        f = frame.f_back if frame is not None else None  # the warn site
+        while f is not None and os.path.normcase(os.path.abspath(
+                f.f_code.co_filename)).startswith(pkg):
+            f = f.f_back
+            level += 1
+        return level
+    finally:
+        del frame
+
+
+def validate_model_definition_consumed(
+    fem: "FEMData",
+    effective_ndf: "Mapping[int, int]",
+    envelope_ndf: int,
+    ndm: int,
+    *,
+    fix_records: "Iterable[FixRecord | SupportRecord]",
+    mass_records: "Iterable[MassRecord]",
+    mass_from_model: bool,
+) -> None:
+    """ADR 0051 §4 — warn when broker supports / masses miss the deck.
+
+    A homogeneous SP record is consumed when a bridge fix-like record
+    (``ops.fix`` / ``s.fix`` / ``s.support``, which is where
+    ``ops.fix_from_model()`` lands too) flags the deck DOF that carries
+    its spatial component on that node (:func:`_sp_deck_dof`, so ``uz``
+    of a 2-D frame is not mistaken for its ``rz``).  A component the
+    node has no DOF for is skipped: no deck can carry it, so nothing is
+    dropped.  A mass record is consumed when a bridge ``mass`` record
+    targets its node, or wholesale by ``mass_from_model``.  Prescribed
+    (non-zero) SPs are load-case records that ``p.from_model(case)``
+    imports, not model definition, and are out of scope.
+
+    One aggregated :class:`UnconsumedModelDefinitionWarning` names the
+    unconsumed counts and the verbs that restate them; a deck that
+    restates every record stays silent.
+    """
+    nodes = getattr(fem, "nodes", None)
+    sp_set = getattr(nodes, "sp", None) if nodes is not None else None
+    mass_set = getattr(nodes, "masses", None) if nodes is not None else None
+    issues: list[str] = []
+
+    # (node, deck DOF, case) per homogeneous record the node can carry.
+    homogeneous: list[tuple[int, int, str]] = []
+    for r in sp_set if sp_set is not None else ():
+        if not r.is_homogeneous:
+            continue
+        n = int(r.node_id)
+        d = _sp_deck_dof(
+            int(r.dof), int(effective_ndf.get(n, envelope_ndf)), ndm)
+        if d is not None:
+            homogeneous.append((n, d, str(r.pattern)))
+    if homogeneous:
+        fixed = {
+            (int(n), d)
+            for rec in fix_records
+            for n in _record_node_ids(fem, rec)
+            for d, flag in enumerate(rec.dofs, start=1)
+            if flag
+        }
+        missed = [h for h in homogeneous if (h[0], h[1]) not in fixed]
+        if missed:
+            cases = sorted({c for _, _, c in missed if c != "default"})
+            source = ", ".join(
+                (["g.constraints.bc"]
+                 if any(c == "default" for _, _, c in missed) else [])
+                + ([f"zero-valued g.displacements holds in case(s) "
+                    f"{', '.join(repr(c) for c in cases)}"] if cases else [])
+            )
+            issues.append(
+                f"{len(missed)} homogeneous SP record(s) on "
+                f"{len({n for n, _, _ in missed})} node(s) ({source}) have "
+                f"no fix — restate them with ops.fix(pg=..., dofs=...) or "
+                f"ops.fix_from_model()"
+            )
+
+    if mass_set is not None and len(mass_set) and not mass_from_model:
+        ids = np.asarray(mass_set.node_ids(), dtype=np.int64)
+        covered = np.fromiter(
+            {int(n) for rec in mass_records for n in _record_node_ids(fem, rec)},
+            dtype=np.int64,
+        )
+        n_missed = int(np.count_nonzero(~np.isin(ids, covered)))
+        if n_missed:
+            issues.append(
+                f"{n_missed} nodal mass record(s) (g.masses) have no mass "
+                f"— restate them with ops.mass_from_model() or "
+                f"ops.mass(pg=..., values=...)"
+            )
+
+    if issues:
+        warnings.warn(
+            "the model defines supports / masses that this deck never "
+            f"emits: {'; '.join(issues)}.  apeSees does not emit "
+            "g.constraints.bc or g.masses on its own (ADR 0051 §4); "
+            "without them the deck runs unsupported / massless, with no "
+            "error.  If this deck leaves them out on purpose, filter "
+            "UnconsumedModelDefinitionWarning.",
+            UnconsumedModelDefinitionWarning,
+            stacklevel=_stacklevel_outside_package(),
+        )
+
+
+def fix_records_from_model(
+    fem: "FEMData",
+    elements: "Iterable[Element]",
+    ndm: int,
+    envelope_ndf: int,
+    *,
+    ndf_records: "Iterable[NdfRecord]" = (),
+    explicit: "Iterable[FixRecord | SupportRecord]" = (),
+) -> tuple[FixRecord, ...]:
+    """``ops.fix_from_model()`` — one ``fix`` per node from the snapshot.
+
+    Folds every homogeneous SP record on ``fem.nodes.sp`` into one DOF
+    mask per node, so two ``g.constraints.bc`` targets sharing a node
+    give one ``fix`` line, not two (OpenSees refuses a second SP on a
+    constrained DOF).  Nodes sharing a mask share one record.  Each
+    record's spatial component lands on the deck DOF that carries it
+    (:func:`_sp_deck_dof`, by ``ndm`` and the node's effective ndf:
+    inferred from *elements*, plus the ``ops.ndf`` overlay, else the
+    envelope), and a component the node lacks is left out.  So ``bc``'s
+    default ``[1, 1, 1]`` (ux, uy, uz) pins x and y on a 2-D frame and
+    leaves ``rz`` free, exactly what
+    :func:`validate_model_definition_consumed` counts.  Prescribed
+    records are not touched: ``p.from_model(case)`` imports those.
+
+    Raises
+    ------
+    BridgeError
+        If an *explicit* fix / support already constrains a DOF the
+        snapshot fixes: the second ``fix`` on it would fail when the
+        deck runs.  Use exactly one channel per DOF.
+    """
+    sp_set = getattr(getattr(fem, "nodes", None), "sp", None)
+    spatial_by_node: dict[int, set[int]] = {}
+    for r in sp_set if sp_set is not None else ():
+        if r.is_homogeneous:
+            spatial_by_node.setdefault(int(r.node_id), set()).add(int(r.dof))
+    if not spatial_by_node:
+        return ()
+
+    inferred = infer_node_ndf(fem, elements, ndm)
+    node_ndf = {
+        **inferred, **resolve_ndf_overlay(fem, ndf_records, inferred, ndm),
+    }
+    dofs_by_node: dict[int, set[int]] = {}
+    for n, spatial in spatial_by_node.items():
+        ndf_n = int(node_ndf.get(n, envelope_ndf))
+        deck = {
+            d for d in (_sp_deck_dof(s, ndf_n, ndm) for s in spatial)
+            if d is not None
+        }
+        if deck:
+            dofs_by_node[n] = deck
+
+    clash = sorted({
+        (int(n), d)
+        for rec in explicit
+        for n in _record_node_ids(fem, rec)
+        for d, flag in enumerate(rec.dofs, start=1)
+        if flag and d in dofs_by_node.get(int(n), ())
+    })
+    if clash:
+        shown = ", ".join(f"node {n} DOF {d}" for n, d in clash[:5])
+        more = f" (+{len(clash) - 5} more)" if len(clash) > 5 else ""
+        raise BridgeError(
+            f"fix_from_model() and an explicit ops.fix / s.fix / s.support "
+            f"both constrain {shown}{more} — OpenSees refuses a second SP "
+            f"on a constrained DOF, so the deck would fail when it runs. "
+            f"Use exactly one channel per DOF: drop the explicit fix, or "
+            f"drop fix_from_model() and restate every support explicitly."
+        )
+
+    by_mask: dict[tuple[int, ...], list[int]] = {}
+    for n in sorted(dofs_by_node):
+        ds = dofs_by_node[n]
+        mask = tuple(1 if d in ds else 0 for d in range(1, max(ds) + 1))
+        by_mask.setdefault(mask, []).append(n)
+    return tuple(
+        FixRecord(pg=None, nodes=tuple(ns), dofs=mask)
+        for mask, ns in by_mask.items()
     )
 
 
