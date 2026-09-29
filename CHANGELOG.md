@@ -14,6 +14,40 @@
      guards the duplicated-header mangling and this comment's position.
      Workflow + rationale: internal_docs/changelog_workflow.md -->
 
+### FIXED — `GeomTransfViewer` draws the OpenSees local frame (local y and z were both negated) and defaults `vecxz` to what the bridge emits
+
+`GeomTransfViewer` computed the local frame in its page's JavaScript as
+`y = x × vecxz`, `z = x × y`. OpenSees (`LinearCrdTransf3d::getLocalAxes`)
+computes `y = vecxz × x`, `z = x × y`, so the viewer drew both `y` and `z`
+negated. A beam along +X with `vecxz = +Z` showed `y = −Y`, `z = −Z`
+instead of `+Y`, `+Z`. An omitted `vecxz` defaulted to `[1, 0, 0]`, which
+is parallel to a beam along X, so that beam drew no frame at all.
+
+The page no longer computes frames. Python computes every frame with
+`compute_local_axes`, the rule the results diagrams and the local-axes
+overlay use. An omitted `vecxz` is what the bridge emits for a member with
+no orientation (`apeSees(default_orientation=Cartesian())`): global Z
+projected off the member, or `x × Y` for a vertical member, so a +Z column
+gets `-X`. OpenSees itself has no default. The diagrams' `default_vecxz`
+gives `+X` there and would draw a defaulted column rolled 180°, so the
+viewer does not use it. Viewers may not import the bridge (ADR 0014), so
+the viewer mirrors the rule and a test pins it to `resolve_vecxz`. An edit in the single-beam
+controls goes to the viewer's local server (`POST /frame`), which returns
+the recomputed frame. A `vecxz` that is zero or parallel to the beam axis
+is reported as degenerate, because OpenSees rejects it.
+`compute_local_axes` would instead substitute the default, and the viewer
+would draw a frame that OpenSees never builds.
+
+The local server is now a `ThreadingHTTPServer`, because edits now travel
+over it. The single-threaded `HTTPServer` waits indefinitely on a socket
+that a browser pre-opens and never uses (the Python docs name this
+hazard), and every edit queued behind that socket would stall.
+`tests/viewers/test_geom_transf_viewer.py` checks the frames against
+`compute_local_axes` and against a transcription of the OpenSees formula,
+for beams along X, Y and Z and skew, with and without `vecxz`. It also
+drives the real `show()` over HTTP, with `webbrowser.open` replaced, so
+no browser or window opens.
+
 ### FIXED — `g.constraints.bc` / `g.masses` records a deck never restates now warn at emit (`UnconsumedModelDefinitionWarning`) + `ops.fix_from_model()` (ADR 0051 §4)
 
 `g.constraints.bc(...)` resolves into homogeneous SP records on

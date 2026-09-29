@@ -17,6 +17,11 @@ Single-beam mode exposes interactive controls (input fields) to
 adjust nodes and ``vecxz`` in real time.  Multi-beam mode draws
 all frames simultaneously with the controls hidden.
 
+The page does no frame math.  Python computes every frame with
+:func:`~apeGmsh.viewers.diagrams._beam_geometry.compute_local_axes`,
+the rule the results diagrams use, and an edit in the controls asks
+the local server for the new frame.
+
 Usage
 -----
 ::
@@ -28,7 +33,7 @@ Usage
     # Single beam — interactive controls in the browser
     viewer.show(node_i=[0, 0, 0], node_j=[0.3, 0.5, 3], vecxz=[1, 0, 0])
 
-    # vecxz defaults to [1, 0, 0] if omitted
+    # vecxz defaults to what the bridge emits: -X for this +Z column
     viewer.show(node_i=[0, 0, 0], node_j=[0, 0, 3])
 
     # Multiple beams
@@ -40,7 +45,7 @@ Usage
 
 Dependencies
 ------------
-stdlib only (``tempfile``, ``webbrowser``, ``json``, ``pathlib``).
+stdlib and numpy.
 Three.js r128 loaded from cdnjs (requires internet on first open).
 """
 from __future__ import annotations
@@ -49,8 +54,10 @@ import json
 import threading
 import webbrowser
 from functools import partial
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Sequence
+
+import numpy as np
 
 
 class GeomTransfViewer:
@@ -92,7 +99,11 @@ class GeomTransfViewer:
         node_j : [x, y, z]
             End node (single-beam convenience).
         vecxz : [vx, vy, vz]
-            Vector in local x-z plane (default ``[1, 0, 0]``).
+            Vector in local x-z plane.  Defaults to what the bridge
+            emits for a member with no orientation
+            (``apeSees(default_orientation=Cartesian())``): global Z
+            projected off the member, or ``x × Y`` for a vertical one
+            (``-X`` for a +Z column).
         beams : list[dict]
             List of dicts with keys ``'node_i'``, ``'node_j'``,
             ``'vecxz'`` (optional).  Pass this for multi-beam mode.
@@ -105,7 +116,10 @@ class GeomTransfViewer:
 
         handler_cls = partial(_ViewerHandler, html=html,
                               shutdown_event=shutdown_event)
-        server = HTTPServer(("127.0.0.1", 0), handler_cls)
+        # Threaded: browsers pre-open sockets they may never use, and a
+        # one-connection-at-a-time server would hold every /frame edit
+        # behind such a socket.
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler_cls)
         port = server.server_address[1]
 
         server_thread = threading.Thread(target=server.serve_forever,
@@ -131,22 +145,95 @@ class GeomTransfViewer:
         """Normalise the caller's arguments into a flat beam list."""
         if beams is not None:
             return [
-                {
-                    "node_i": list(b["node_i"]),
-                    "node_j": list(b["node_j"]),
-                    "vecxz": list(b.get("vecxz", [1, 0, 0])),
-                }
+                _beam_payload(b["node_i"], b["node_j"], b.get("vecxz"))
                 for b in beams
             ]
         if node_i is not None and node_j is not None:
-            return [
-                {
-                    "node_i": list(node_i),
-                    "node_j": list(node_j),
-                    "vecxz": list(vecxz) if vecxz is not None else [1, 0, 0],
-                }
-            ]
+            return [_beam_payload(node_i, node_j, vecxz)]
         raise ValueError("Provide either (node_i, node_j) or beams=[...]")
+
+
+_GLOBAL_Y = np.array([0.0, 1.0, 0.0])
+_GLOBAL_Z = np.array([0.0, 0.0, 1.0])
+_VERTICAL_TOL = 1e-9    # opensees/_orientation.py ``_TOL``
+
+
+def _bridge_default_vecxz(x_local: np.ndarray) -> np.ndarray:
+    """The ``vecxz`` the bridge emits for a member with no orientation.
+
+    ``resolve_vecxz`` with the default ``Cartesian()`` triad
+    (``e2 = +Y``, ``e3 = +Z``): global Z projected off the member, or,
+    for a vertical member, ``x × Y`` (``-X`` for a +Z column).  Viewers
+    may not import ``apeGmsh.opensees`` (ADR 0014), so this mirrors the
+    rule and ``tests/viewers/test_geom_transf_viewer.py`` pins it to
+    ``resolve_vecxz``.
+    """
+    if abs(float(np.dot(x_local, _GLOBAL_Z))) < 1.0 - _VERTICAL_TOL:
+        local_y = np.cross(_GLOBAL_Z, x_local)
+        local_y /= float(np.linalg.norm(local_y))
+    else:
+        local_y = _GLOBAL_Y
+    vecxz = np.cross(x_local, local_y)
+    return vecxz / float(np.linalg.norm(vecxz))
+
+
+def _beam_payload(
+    node_i: Sequence[float],
+    node_j: Sequence[float],
+    vecxz: Sequence[float] | None = None,
+) -> dict:
+    """One beam as the page draws it: nodes, ``vecxz`` and local frame.
+
+    The frame is :func:`compute_local_axes`, the rule the results
+    diagrams use, so the page cannot drift from them.  An omitted
+    ``vecxz`` is what the bridge would emit for the member
+    (:func:`_bridge_default_vecxz`).  OpenSees itself has no default.
+    ``frame`` is ``None``, with a ``degenerate`` reason, where OpenSees
+    refuses the transformation: the nodes coincide, or ``vecxz`` is
+    zero or parallel to the beam axis.  ``compute_local_axes`` would
+    quietly substitute its own default there and draw a frame OpenSees
+    never builds.
+    """
+    # Deferred: the diagrams package costs ~0.2 s to import, which
+    # ``import apeGmsh.viewers`` should not pay for this viewer.
+    from .diagrams._beam_geometry import (
+        _DEGENERATE_EPS,
+        compute_local_axes,
+    )
+
+    ci = np.asarray(node_i, dtype=np.float64)
+    cj = np.asarray(node_j, dtype=np.float64)
+    for name, node in (("node_i", ci), ("node_j", cj)):
+        if node.shape != (3,):
+            raise ValueError(
+                f"GeomTransfViewer is 3-D: {name} needs 3 coordinates, "
+                f"got {node.tolist()}. Give a 2-D model's nodes z=0."
+            )
+    chord = cj - ci
+    length = float(np.linalg.norm(chord))
+    beam: dict = {"node_i": ci.tolist(), "node_j": cj.tolist(), "frame": None}
+    if length <= _DEGENERATE_EPS:
+        # No axis, so no default either; show the Cartesian reference.
+        v = _GLOBAL_Z if vecxz is None else np.asarray(vecxz, dtype=np.float64)
+        beam["vecxz"] = v.tolist()
+        beam["degenerate"] = "node I and node J coincide"
+        return beam
+    x_local = chord / length
+    v = (
+        _bridge_default_vecxz(x_local) if vecxz is None
+        else np.asarray(vecxz, dtype=np.float64)
+    )
+    beam["vecxz"] = v.tolist()
+    # The same test compute_local_axes applies before its fallback.
+    if np.linalg.norm(v - np.dot(v, x_local) * x_local) < _DEGENERATE_EPS:
+        beam["degenerate"] = "vecxz is zero or parallel to the beam axis"
+        return beam
+    ex, ey, ez, length = compute_local_axes(ci, cj, v)
+    beam["frame"] = {
+        "ex": ex.tolist(), "ey": ey.tolist(), "ez": ez.tolist(),
+        "L": length,
+    }
+    return beam
 
 
 # ======================================================================
@@ -154,7 +241,8 @@ class GeomTransfViewer:
 # ======================================================================
 
 class _ViewerHandler(BaseHTTPRequestHandler):
-    """Serves the viewer HTML and listens for a /shutdown beacon."""
+    """Serves the viewer HTML, recomputes edited frames, and listens
+    for a /shutdown beacon."""
 
     def __init__(self, *args, html: str, shutdown_event: threading.Event,
                  **kwargs):
@@ -169,8 +257,21 @@ class _ViewerHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(self._html.encode("utf-8"))
 
+    # POST /frame     -> the frames of the edited beams, as JSON
     # POST /shutdown  -> signal Python to stop blocking
     def do_POST(self):  # noqa: N802
+        if self.path == "/frame":
+            size = int(self.headers.get("Content-Length", 0))
+            beams = json.loads(self.rfile.read(size))
+            body = json.dumps([
+                _beam_payload(b["node_i"], b["node_j"], b["vecxz"])
+                for b in beams
+            ]).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         self.send_response(200)
         self.end_headers()
         self._shutdown_event.set()
@@ -401,19 +502,9 @@ function grid(group){{
     group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([V3(-8,i,0),V3(8,i,0)]),mat));
   }}
 }}
-// ── local frame computation (OpenSees convention) ─────────────────────────
-function localFrame(ni, nj, vxz){{
-  const ex_r = sub(nj,ni);
-  const L = norm(ex_r);
-  if(L<1e-6) return null;
-  const ex = normalz(ex_r);
-  const ey_r = cross(ex, vxz);
-  if(norm(ey_r)<1e-6) return null;
-  const ey = normalz(ey_r);
-  const ez = normalz(cross(ex,ey));
-  return {{ex,ey,ez,L}};
-}}
 // ── build scene ───────────────────────────────────────────────────────────
+// Each beam arrives with its local frame computed in Python
+// (compute_local_axes, the OpenSees convention); the page only draws it.
 let grp = null;
 function buildScene(beams){{
   if(grp){{ scene.remove(grp); }}
@@ -436,9 +527,9 @@ function buildScene(beams){{
     tube(ni,nj,0x666666,grp);
     sphere(ni,C.gy.h,0.1,grp);
     sphere(nj,C.gx.h,0.1,grp);
-    const f=localFrame(ni,nj,vxz);
+    const f=b.frame;
     if(!f){{
-      readoutLines.push(`Beam ${{idx}}: degenerate (beam axis parallel to vecxz)`);
+      readoutLines.push(`Beam ${{idx+1}}: degenerate (${{b.degenerate}})`);
       return;
     }}
     const {{ex,ey,ez,L}}=f;
@@ -483,6 +574,8 @@ function buildScene(beams){{
   document.getElementById('hud_beams').textContent = beams.length>1?`${{beams.length}} beams`:'';
 }}
 // ── interactive controls (single-beam only) ───────────────────────────────
+// An edit asks the local server for the new frame, so frames are only
+// ever computed in Python.  A stale reply (an older edit) is dropped.
 function readInputBeam(){{
   const g=id=>parseFloat(document.getElementById(id).value)||0;
   return [{{
@@ -491,12 +584,23 @@ function readInputBeam(){{
     vecxz: [g('vx'),g('vy'),g('vz')],
   }}];
 }}
+let editSeq=0;
+function refreshFromInputs(){{
+  const seq=++editSeq;
+  fetch('/frame',{{method:'POST',body:JSON.stringify(readInputBeam())}})
+    .then(r=>r.json())
+    .then(beams=>{{ if(seq===editSeq) buildScene(beams); }})
+    .catch(()=>{{
+      document.getElementById('readout').textContent=
+        'Frame not updated: the viewer server did not answer. Call show() again.';
+    }});
+}}
 if(!MULTI){{
   ['ix','iy','iz','jx','jy','jz','vx','vy','vz'].forEach(id=>
-    document.getElementById(id).addEventListener('input',()=>buildScene(readInputBeam()))
+    document.getElementById(id).addEventListener('input',refreshFromInputs)
   );
 }}
-buildScene(MULTI ? BEAMS_INIT : readInputBeam());
+buildScene(BEAMS_INIT);
 // ── resize ────────────────────────────────────────────────────────────────
 function resize(){{
   const vp=document.getElementById('viewport');
