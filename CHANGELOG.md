@@ -14,6 +14,51 @@
      guards the duplicated-header mangling and this comment's position.
      Workflow + rationale: internal_docs/changelog_workflow.md -->
 
+### FIXED — `ops.mass_from_model()` maps broker masses onto 2-D node DOFs by `(ndm, ndf)`, not by position
+
+Broker masses (`fem.nodes.masses`, from `g.masses.*`) are spatial
+`(mx, my, mz, Ixx, Iyy, Izz)` 6-vectors. `mass_from_model()` used to trim
+them positionally to the node's ndf, which is only right in 3-D. Two 2-D
+failures followed:
+
+- **2-D frame (`ndm=2, ndf=3`, DOFs `ux uy rz`): silent wrong physics.**
+  The node received `(mx, my, mz)`, so the translational mass landed on
+  `rz` as a rotational inertia (`g.masses.line(..., linear_density=100)`
+  emitted `mass 1 40 40 40`). It now emits `(mx, my, Izz)`, i.e.
+  `mass 1 40 40 0`. **This changes emitted decks and modal results for
+  2-D frames.**
+- **2-D solid (`ndm=2, ndf=2`): raised.** The resolver fills `mz`
+  unconditionally, so `mass_from_model()` raised a `BridgeError` ("6
+  components but the node's ndf is 2"). It now emits `(mx, my)`.
+
+The new `broker_mass_components` (`opensees/_internal/build.py`) is the
+mass counterpart of `broker_load_components` and uses the same
+`_load_dof_layout`. On `ndm=2`, an `mz` that rides with in-plane mass is
+dropped, because the resolver fills it by default and a 2-D node has no
+z-translation. A z-only mass (`dofs=[3]`, so `mx = my = 0`) is explicit
+out-of-plane intent and raises a `BridgeError`, like `Fz` on the loads
+path. A non-zero `Ixx`/`Iyy`, or an `Izz` on an `ndf=2` node, comes from
+an explicit `rotational=` or `derive_rotational=True` and also raises,
+because the inertia would otherwise be lost. So **every
+`derive_rotational=True` mass on a 2-D solid now raises**: surface and
+volume consistent masses derive non-zero `Ixx`/`Iyy`, which a 2-D node
+cannot carry. Line masses never derive rotational inertia. **2-D u-p
+nodes** (`quadUP` and friends, `ndm=2, ndf=3`) share the frame layout, so
+their third DOF (pore pressure) now receives `Izz` (normally 0) instead
+of `mz`. **Known gap:** the record does not carry the resolver's `dofs`
+mask, so a mixed mask such as `dofs=[1, 3]` still loses its `mz` without
+an error. For the same reason, the z-only guard sees each node's
+accumulated record: a `dofs=[3]` mass whose nodes all also carry in-plane
+mass from another `g.masses` def is dropped without an error. Closing
+both needs the mask on `MassRecord`. For `ndm=3` the mapping
+delegates to the positional `fit_dof_vector`, so 3-D decks are
+byte-identical (`test_mass_from_model.py`). The flat, partitioned
+(`model_mass_by_rank`) and per-rank paths all use the new mapping.
+Explicit `ops.mass(values=...)` vectors are DOF-ordered and stay
+positional. The H5 archival emitter still rejects `mass_from_model()`:
+`model.h5` keeps the neutral 6-vector. Tests:
+`tests/opensees/integration/test_mass_from_model_2d.py`.
+
 ### FIXED — a FEMData snapshot answers a raw `(dim, tag)` selection only from the Gmsh model it was extracted from
 
 `fem.nodes.select(target=[(dim, tag)])` and `fem.elements.select(...)` look a
