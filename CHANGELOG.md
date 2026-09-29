@@ -14,6 +14,10 @@
      guards the duplicated-header mangling and this comment's position.
      Workflow + rationale: internal_docs/changelog_workflow.md -->
 
+### CHANGED — deterministic `studio/_api_index.json` (program slice A1.2, #1214)
+
+`_index_build.build_index` no longer stamps `generated`, and `write_index` serialises through the new `serialize_index` (sorted keys, indent 2, trailing newline). Regenerating the index is now byte-identical, so it stops producing merge-conflict diffs. `tests/studio/test_lookup.py::test_index_build_is_byte_deterministic` builds twice and compares against the committed file. No reader used `generated`.
+
 ### CHANGED — the ADR index (`decisions/README.md`) is generated from each ADR's Status line (program slice A1.3)
 
 `scripts/adr_index.py` now writes the README as the hand-written preamble
