@@ -154,6 +154,73 @@ jobs:
   # Tool versions are pinned because both tools add rules/checks across
   # releases, which would move the measured count under our feet; bump
   # the pins and re-measure the baseline together, in one PR.
+  # apeGmshViewer (ADR 0112): the app's own checks, run when the PR or push
+  # touches apeGmshViewer/ (or this workflow). Not a required check yet: it
+  # joins the land_pr.py list once the maintainer promotes it.
+  app-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # A paths filter per job: `on.paths` would gate the whole workflow. It
+      # fails closed: the checks run unless a successful diff against the PR
+      # base (merge-base) or the pushed-from commit shows no change; a manual
+      # run and any error in here run them (set -e makes an error a red step).
+      - name: Did apeGmshViewer/ change?
+        id: changes
+        run: |
+          set -euo pipefail
+          echo "app=true" >> "$GITHUB_OUTPUT"
+          case "${{ github.event_name }}" in
+            pull_request)
+              git fetch -q origin "${{ github.base_ref }}"
+              range="origin/${{ github.base_ref }}...HEAD" ;;
+            push)
+              before="${{ github.event.before }}"
+              if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+                echo "no pushed-from commit; running the app checks"; exit 0
+              fi
+              range="$before..HEAD" ;;
+            *)
+              echo "${{ github.event_name }}: running the app checks"; exit 0 ;;
+          esac
+          changed=$(git diff --name-only "$range" -- apeGmshViewer/ .github/workflows/tests.yml)
+          if [ -z "$changed" ]; then
+            echo "app=false" >> "$GITHUB_OUTPUT"
+            echo "apeGmshViewer/ unchanged in $range; nothing to check"
+          else
+            echo "changed in $range:"; echo "$changed"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.app == 'true'
+        with:
+          node-version: '22.18'
+          cache: npm
+          cache-dependency-path: apeGmshViewer/package-lock.json
+
+      - name: npm ci
+        if: steps.changes.outputs.app == 'true'
+        working-directory: apeGmshViewer
+        run: npm ci --no-audit --no-fund
+
+      - name: typecheck
+        if: steps.changes.outputs.app == 'true'
+        working-directory: apeGmshViewer
+        run: npm run typecheck
+
+      - name: test
+        if: steps.changes.outputs.app == 'true'
+        working-directory: apeGmshViewer
+        run: npm test
+
+      - name: lint (dependency-cruiser)
+        if: steps.changes.outputs.app == 'true'
+        working-directory: apeGmshViewer
+        run: npm run lint
+
   static-gates:
     runs-on: ubuntu-latest
     env:

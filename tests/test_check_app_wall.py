@@ -95,6 +95,89 @@ def test_w3_flags_subprocess_py(repo, src):
     assert _rules(repo) == ["W3"]
 
 
+@pytest.mark.parametrize("src", [
+    "import { mountLegend } from './legend.ts';\n",             # another panel (flat module)
+    "import { x } from './legend/index.ts';\n",                 # another panel (directory)
+    "import { Viewport } from '../renderer/viewport.ts';\n",   # the viewport
+    "import { draw } from '../render/draw.ts';\n",             # the viewport, design name
+    "import { readModel } from '../reader/read.ts';\n",        # the HDF5 reader
+    "import { BlobStore } from '../state/blobs.ts';\n",        # the BlobStore
+    "const b = await import('../state/blobs.ts');\n",          # dynamic import, same target
+    "import { Effects } from '../effects.ts';\n",              # the bypass through effects
+    "import { loadModel } from '../state/load.ts';\n",         # the bypass through the loader
+    "import { reduce } from '../state/reduce.ts';\n",          # not on the allow-list either
+    "import type { ChainNode } from '../chain/resolve.ts';\n", # a type import counts
+    "import * as THREE from 'three';\n",                       # a package
+    "import { thing } from '../ui';\n",                        # ui itself, not a module under ui/
+])
+def test_w4_flags_panel_import(repo, src):
+    _put(repo, "apeGmshViewer/src/panels/header.ts", src)
+    assert _rules(repo) == ["W4"]
+
+
+def test_w4_flags_a_multi_line_import_in_a_panel(repo):
+    # `import\n * as R from '...'` spans lines; the ` * as R from` line is not a comment.
+    _put(repo, "apeGmshViewer/src/panels/header.ts", "import\n * as R from '../reader/read.ts';\nexport const r = R;\n")
+    found = wall.scan(repo)
+    assert [f.split(": ")[1].split(" ")[0] for f in found] == ["W4"]
+    assert found[0].startswith("apeGmshViewer/src/panels/header.ts:2: W4 ")
+
+
+@pytest.mark.parametrize("src", [
+    "export { Effects } from '../effects.ts';\n",             # the laundering route
+    "export { BlobStore } from '../state/blobs.ts';\n",
+    "import { Store } from '../state/store.ts';\n",            # ui/ gets the types only
+    "import { modelSummary } from '../state/selectors.ts';\n",
+    "import * as THREE from 'three';\n",
+])
+def test_w4_flags_ui_leak(repo, src):
+    _put(repo, "apeGmshViewer/src/ui/leak.ts", src)
+    assert _rules(repo) == ["W4"]
+    assert "ui module imports" in wall.scan(repo)[0]
+
+
+def test_w4_allows_ui_to_import_ui_and_the_state_types(repo):
+    _put(repo, "apeGmshViewer/src/ui/dom.ts", "import type { State } from '../state/types.ts';\nimport { x } from './icons.ts';\n")
+    assert wall.scan(repo) == []
+
+
+def test_comments_are_stripped_but_a_block_comment_line_starting_with_star_is_not_code(repo):
+    _put(repo, "apeGmshViewer/src/panels/header.ts", """\
+        /* a block comment
+         * import { Viewport } from '../renderer/viewport.ts'
+         */
+        // import { readModel } from '../reader/read.ts'
+        const s = "import { a } from '../effects.ts'"; // a string, not an import
+        const t = `require('apegmsh')`;
+        import { el } from '../ui/dom.ts';
+        """)
+    assert wall.scan(repo) == []
+
+
+def test_w4_flags_from_a_panel_subdirectory(repo):
+    _put(repo, "apeGmshViewer/src/panels/header/index.ts", "import { legend } from '../legend.ts';\n")
+    assert _rules(repo) == ["W4"]
+    assert "panel 'header' imports panel 'legend'" in wall.scan(repo)[0]
+
+
+def test_w4_allows_the_store_selectors_types_ui_and_own_modules(repo):
+    _put(repo, "apeGmshViewer/src/panels/header.ts", """\
+        import { byId, el } from '../ui/dom.ts';
+        import { modelSummary } from '../state/selectors.ts';
+        import type { State, Store } from '../state/store.ts';
+        import type { BlobRef, ChainNode } from '../state/types.ts';
+        import { rows } from './header/rows.ts';
+        // import { Viewport } from '../renderer/viewport.ts' in a comment
+        """)
+    _put(repo, "apeGmshViewer/src/renderer/app.ts", """\
+        import { mountHeader } from '../panels/header.ts';
+        import { mountLegend } from '../panels/legend.ts';
+        import { BlobStore } from '../state/blobs.ts';
+        import { Effects } from '../effects.ts';
+        """)
+    assert wall.scan(repo) == []
+
+
 def test_clean_cases_pass(repo):
     _put(repo, "apeGmshViewer/src/a.ts", """\
         import * as THREE from 'three';
