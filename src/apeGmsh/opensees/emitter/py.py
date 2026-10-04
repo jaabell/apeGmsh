@@ -25,6 +25,7 @@ from .base import (
     NUMPY_VALUE_TYPES,
     DroppedAxisGuard,
     StrategySpec,
+    command_row,
     plain_scalar,
 )
 
@@ -1004,3 +1005,9 @@ class PyEmitter:
         self._lines.append(f"    {_ops_call('system', primary)}")
         self._lines.append("except Exception:")
         self._lines.append(f"    {_ops_call('system', fallback)}")
+
+    # -- Command channel (ADR 0114 D2/D3) ---------------------------------
+
+    def command(self, verb: str, *args: int | float | str) -> None:
+        command_row(verb)
+        self._lines.append(_ops_call(verb, *args))

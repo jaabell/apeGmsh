@@ -45,6 +45,7 @@ from .base import (
     NUMPY_VALUE_TYPES,
     DroppedAxisGuard,
     StrategySpec,
+    command_row,
     plain_scalar,
 )
 
@@ -1744,3 +1745,9 @@ class TclEmitter:
             f"if {{[catch {{system {primary}}} _err]}} "
             f"{{ system {fallback} }}"
         )
+
+    # -- Command channel (ADR 0114 D2/D3) ---------------------------------
+
+    def command(self, verb: str, *args: int | float | str) -> None:
+        command_row(verb)
+        self._lines.append(_join(verb, *args))
