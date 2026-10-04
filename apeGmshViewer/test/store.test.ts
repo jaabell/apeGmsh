@@ -113,6 +113,7 @@ test("decision 15: an element holds a range into the connectivity blob, never a 
 const EVERY: Record<EventType, Event> = {
   fileOpened: { type: "fileOpened", artifact: "geometry", path: "x.geometry.h5" },
   fileLoaded: { type: "fileLoaded", artifact: "model", load },
+  setLoaded: { type: "setLoaded", model: load, geometry: null },
   fileFailed: { type: "fileFailed", artifact: "results", path: "x.results.h5", error: "no reader" },
   fileClosed: { type: "fileClosed", artifact: "results" },
   fileChanged: { type: "fileChanged", path: model.path },
@@ -132,6 +133,8 @@ const EVERY: Record<EventType, Event> = {
   inspectorUnpin: { type: "inspectorUnpin", decl: archPath },
   openWindow: { type: "openWindow", window: "stages" },
   closeWindow: { type: "closeWindow", window: "stages" },
+  requestSource: { type: "requestSource", decl: archPath },
+  sourceResult: { type: "sourceResult", decl: archPath, ok: false, reason: "missing: x.py" },
 };
 
 test("reducer purity: every event leaves a frozen state untouched and returns plain data", () => {
@@ -147,7 +150,7 @@ test("reducer purity: every event leaves a frozen state untouched and returns pl
     }
     assertPlain(next, e.type);
   }
-  assert.equal(Object.keys(EVERY).length, 21, "decision 17's 20 events plus fileClosed");
+  assert.equal(Object.keys(EVERY).length, 24, "decision 17's 20 events plus fileClosed, requestSource, sourceResult and setLoaded (V2f)");
 });
 
 test("an event the union does not know raises at run time", () => {
@@ -389,7 +392,8 @@ test("the reader's refusal message parses into a zone, a version, the accepted r
   assert.equal(old?.accepted, "2.10 and any later 2.x", "the floor through the major, never the 2.32-2.33 warn window");
   assert.doesNotMatch(old!.accepted, /2\.3[23]/);
   assert.equal(old?.newer, false);
-  assert.equal(parseRefusal("opensees_schema_version 3.1.0: this app reads major 2 only")?.accepted, "2.0 and any later 2.x");
+  // The opensees floor is 2.11, the 0-based rank flip (ADR 0113 D1).
+  assert.equal(parseRefusal("opensees_schema_version 3.1.0: this app reads major 2 only")?.accepted, "2.11 and any later 2.x");
   assert.equal(parseRefusal("/nodes is missing"), null);
 });
 
