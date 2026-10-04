@@ -290,24 +290,7 @@ class OpenSeesModel:
         with h5_reader.open(spath, meta_path=meta_path) as model:
             meta = model.meta()
             model_name = str(meta.get("model_name", "model"))
-            # Broker-stamped ``/meta.ndm`` reflects element-type
-            # dimensionality, which can be less than the bridge's
-            # spatial ndm (a 3-D frame composed of 1-D line elements
-            # has broker ndm=1 but bridge ndm=3).  For ``build()`` we
-            # need the bridge's spatial ndm so the re-emitted deck
-            # validates against ``ops.model(ndm=N, ndf=ndf)``.
-            # ADR 0019 INV-5: tag identity may diverge across
-            # round-trip; this ndm-inference branch documents that the
-            # spatial dimension also has to be reconstituted.  Phase 6
-            # (ADR 0021 lineage) is the right place to surface this
-            # explicitly; Phase 3 derives via the transform vecxz
-            # vector length (the bridge writes a vecxz of length 3 in
-            # 3D and length 0 in pure 2D — a non-empty vecxz with N
-            # components implies ndm >= N).
-            ndm = max(
-                int(meta.get("ndm", 0)),
-                _infer_ndm_from_transforms(model.handle),
-            )
+            ndm = h5_reader.read_spatial_ndm(meta, model.handle)
             ndf = int(meta.get("ndf", 0))
             snapshot_id = str(meta.get("snapshot_id", ""))
 
@@ -535,6 +518,7 @@ class OpenSeesModel:
         # replay and discarded it — pure waste, and a staged model
         # would trip the flat-replay guard before reaching the
         # stage-aware compose path.)
+        self._require_declared_ndm()
         from .emitter.h5 import H5Emitter
 
         emitter = H5Emitter(
@@ -576,10 +560,12 @@ class OpenSeesModel:
         Raises
         ------
         ValueError
-            ``target`` is unrecognised.
+            ``target`` is unrecognised, or the archive declares no ndm
+            (a broker-only ``fem.to_h5`` file, ``/meta/ndm = 0``).
         TypeError
             ``out=`` missing for the ``"h5"`` target.
         """
+        self._require_declared_ndm()
         if target == "tcl":
             return self._build_text("tcl", out)
         if target == "py":
@@ -616,8 +602,24 @@ class OpenSeesModel:
 
     @property
     def ndm(self) -> int:
-        """``/meta/ndm`` value from the source archive."""
+        """``/meta/ndm`` value from the source archive.
+
+        ``0`` on a broker-only archive (``fem.to_h5`` without the
+        bridge): no ``ops.model`` declaration was ever made, so no
+        deck can be built from it (:meth:`build` and :meth:`to_h5`
+        refuse).
+        """
         return self._ndm
+
+    def _require_declared_ndm(self) -> None:
+        """Refuse to emit a model whose archive declares no ndm (#1291)."""
+        if int(self._ndm) < 1:
+            raise ValueError(
+                "OpenSeesModel: model.h5 has no declared ndm: written by "
+                "fem.to_h5 without the bridge (/meta/ndm = 0). Build the "
+                "model through apeSees(fem) and ops.model(ndm=, ndf=) first; "
+                "a deck cannot be emitted without its spatial dimension."
+            )
 
     @property
     def ndf(self) -> int:
@@ -1293,6 +1295,7 @@ class OpenSeesModel:
             emitter_fresh,
             path,
             model_name=self._model_name,
+            ndm=int(self._ndm),
             ndf=int(self._ndf),
             cuts=self._cuts,
             sweeps=self._sweeps,
@@ -1536,26 +1539,3 @@ def _resolve_fem_root_for_read(path: str, fem_root: str) -> str:
     return fem_root
 
 
-def _infer_ndm_from_transforms(f: Any) -> int:
-    """Best-effort spatial dimension from ``/opensees/transforms/*/per_element_vecxz``.
-
-    Returns 0 when no transforms are present (caller's ``max(broker_ndm,
-    inferred)`` falls back to the broker value).  The H5 emitter
-    writes ``per_element_vecxz`` as ``(N, 3)`` even in 2D, so this
-    can't distinguish 2D from 3D — but distinguishes "has bridge
-    output at all" from "broker only" which is the case worth
-    salvaging at read time.
-    """
-    if "opensees" not in f:
-        return 0
-    if "transforms" not in f["opensees"]:
-        return 0
-    for tname in f["opensees/transforms"]:
-        g = f[f"opensees/transforms/{tname}"]
-        if "per_element_vecxz" in g:
-            shape = g["per_element_vecxz"].shape
-            if len(shape) >= 2 and shape[1] >= 3:
-                return 3
-            if len(shape) >= 2 and shape[1] == 2:
-                return 2
-    return 0
