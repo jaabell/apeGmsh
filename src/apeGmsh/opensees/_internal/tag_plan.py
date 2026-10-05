@@ -21,19 +21,27 @@ number their derived tags in their own order today. The plan for one
 mode is what that mode's emit writes.
 
 A plan row is ``(kind, tag)`` in the emit's verb vocabulary: the verb,
-joined by ``:`` to its type token when the verb takes one
-(``("element:quad", 7)``, ``("region", 3)``). That is the vocabulary of
-the stream the emitter records, so the oracle can compare the two.
+joined by ``:`` to its type token when the planner knows it
+(``("region", 3)``). That is the vocabulary of the stream the emitter
+records, so the oracle can compare the two. An element spec picks its
+type token inside its own ``_emit``, so an element row carries the bare
+verb, ``("element", 7)``, and the oracle compares element rows by verb.
+
+The emit helpers that are handed only the emit allocator reach the plan
+through it: :func:`plan_of` reads the plan that an allocator from
+:meth:`TagPlan.emit_allocator` was forked for.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, NamedTuple
 
 from .tag_allocator import TagAllocator, TagLawError
 
 if TYPE_CHECKING:
     from ..apesees import BuiltModel
+    from .build import ElementPlanRows
+    from .types import Element
 
 #: One planned emission: ``(kind, tag)`` in the emit's verb vocabulary.
 TagRow = tuple[str, int]
@@ -113,10 +121,37 @@ class FamilyTagPlan:
 
 @dataclass(frozen=True, slots=True)
 class ElementTagPlan(FamilyTagPlan):
-    """Element-spec fan-out: one tag per element instance of every spec."""
+    """Element-spec fan-out: one tag per element instance of every spec.
+
+    ``specs`` is :func:`~.build.allocate_element_tags`'s plan, made once
+    by :func:`plan_tags`: each element spec, in the emit's topological
+    order, with its columnar rows (FEM id, connectivity, tag). The emit
+    paths read it instead of allocating. :meth:`stream` derives the
+    ``("element", tag)`` rows on demand, so the plan holds no Python
+    object per element.
+    """
 
     FAMILY: ClassVar[str] = "elements"
     KINDS: ClassVar[frozenset[str]] = frozenset({"element"})
+    MIGRATED: ClassVar[bool] = True
+
+    specs: tuple[tuple[Element, ElementPlanRows], ...] = field(
+        default=(), compare=False)
+
+    def __post_init__(self) -> None:
+        if self.rows:
+            raise TagLawError(
+                "elements: the element plan derives its rows from specs; "
+                "pass specs, not rows."
+            )
+
+    def stream(self) -> tuple[TagRow, ...]:
+        """One ``("element", tag)`` row per planned element, spec by spec."""
+        return tuple(
+            ("element", tag)
+            for _spec, sub in self.specs
+            for _eid, _conn, tag in sub
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,7 +227,10 @@ class TagPlan:
     """Every tag one emit mode writes, planned before the emit.
 
     ``allocator`` is the planner allocator, frozen: it holds the seeded
-    primitive tags and every planned family's mints.
+    primitive tags and every planned family's mints. ``inputs`` is
+    :func:`plan_inputs` of the model the plan was made for, so a memoised
+    plan can tell whether it still describes a model
+    (:meth:`planned_for`).
     """
 
     mode: TagMode
@@ -204,6 +242,19 @@ class TagPlan:
     mp_elements: MPElementTagPlan
     interfaces: InterfaceTagPlan
     contacts: ContactTagPlan
+    inputs: tuple[object, ...] = field(default=(), compare=False, repr=False)
+
+    def planned_for(self, bm: BuiltModel) -> bool:
+        """``True`` iff this plan was made from exactly ``bm``'s inputs.
+
+        Every public field of ``bm`` must be the very object the plan
+        read (identity, not equality): a model copied with
+        :func:`dataclasses.replace` or :func:`copy.copy` and then changed
+        is not described by its source's plan.
+        """
+        now = plan_inputs(bm)
+        return len(now) == len(self.inputs) and all(
+            a is b for a, b in zip(now, self.inputs))
 
     def __post_init__(self) -> None:
         if not self.allocator.frozen:
@@ -261,7 +312,42 @@ class TagPlan:
         counter from the plan, and every :attr:`frozen_kinds` kind raises
         :class:`TagLawError` on a mint.
         """
-        return self.allocator.fork(self.frozen_kinds)
+        return self.allocator.fork(self.frozen_kinds, origin=self)
+
+
+def plan_of(tags: TagAllocator) -> TagPlan:
+    """The plan ``tags`` was forked from by :meth:`TagPlan.emit_allocator`.
+
+    The emit helpers that are handed only the emit allocator read the
+    plan here. Any other allocator (a fresh one, the frozen planner
+    allocator, a plain :meth:`TagAllocator.fork`) raises
+    :class:`TagLawError`: no plan drove that emit.
+    """
+    # The fork's origin is set by TagAllocator.fork and read only here
+    # (a sibling module of tag_allocator in this package).
+    plan = tags._origin
+    if not isinstance(plan, TagPlan):
+        raise TagLawError(
+            "plan_of: this allocator did not come from "
+            "TagPlan.emit_allocator(), so it carries no tag plan; an emit "
+            "is driven by BuiltModel.emit (ADR 0114 D4, amended)."
+        )
+    return plan
+
+
+def plan_inputs(bm: BuiltModel) -> tuple[object, ...]:
+    """Every public field of ``bm``, in field order: what a plan reads.
+
+    The planner reads the primitives, their tags, the FEM snapshot and
+    ``element_tags`` today, and the families still to migrate read the
+    records; taking every public field covers them all.
+    """
+    import dataclasses
+
+    return tuple(
+        getattr(bm, f.name) for f in dataclasses.fields(bm)
+        if not f.name.startswith("_")
+    )
 
 
 def plan_tags(bm: BuiltModel, mode: TagMode) -> TagPlan:
@@ -275,7 +361,11 @@ def plan_tags(bm: BuiltModel, mode: TagMode) -> TagPlan:
     describe the tags the model was registered with.
     """
     from ..apesees import _kind_of
-    from .build import reserve_fem_element_tags
+    from .build import (
+        allocate_element_tags,
+        reserve_fem_element_tags,
+        topological_order,
+    )
     from .types import Element
 
     if not isinstance(mode, TagMode):
@@ -296,16 +386,27 @@ def plan_tags(bm: BuiltModel, mode: TagMode) -> TagPlan:
             bm.fem, tags,
         )
 
-    # Every family is pending: its tags are still minted at emit time.
+    # Elements: every spec's fan-out, in the emit's topological order.
+    # Each emit path made this allocation once, before any other
+    # element-kind mint, so planning it here numbers it as they did.
+    elements = ElementTagPlan(specs=tuple(allocate_element_tags(
+        [p for p in topological_order(bm.primitives)
+         if isinstance(p, Element)],
+        bm.fem, tags, element_tags=bm.element_tags,
+    )))
+
+    # The other families are pending: their tags are still minted at
+    # emit time, from TagPlan.emit_allocator().
     tags.freeze()
     return TagPlan(
         mode=mode,
         allocator=tags,
-        elements=ElementTagPlan(),
+        elements=elements,
         transforms=TransformTagPlan(),
         regions=RegionTagPlan(),
         parameters=ParameterTagPlan(),
         mp_elements=MPElementTagPlan(),
         interfaces=InterfaceTagPlan(),
         contacts=ContactTagPlan(),
+        inputs=plan_inputs(bm),
     )
