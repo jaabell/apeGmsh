@@ -14,6 +14,8 @@ reimplements any of it (ADR 0018 INV-1/3, scope C1).
 from __future__ import annotations
 
 import os
+import warnings
+from collections import Counter
 from typing import TYPE_CHECKING, Any, Sequence
 
 if TYPE_CHECKING:
@@ -23,6 +25,7 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    "ReplaySkippedStreamWarning",
     "_compose_model_h5",
     "_merge_provenance",
     "_replay_into",
@@ -30,6 +33,19 @@ __all__ = [
     "_override_schema_version",
     "_path_stem",
 ]
+
+
+class ReplaySkippedStreamWarning(UserWarning):
+    """Deck replay left out a stream the source model carries (D8, #1412).
+
+    :func:`_replay_into` re-emits the ``/opensees`` deck records plus the
+    ``g.reinforce`` ties.  It has no deck record for the neutral-zone
+    streams that the forward bridge fans out at emit time: equalDOF /
+    rigidLink / rigidDiaphragm / node-to-surface couplings, penalty and
+    equation ties, ``g.embed`` ties, contacts, and phantom-bridged
+    interfaces.  A replayed deck that carries any of them differs from the
+    forward ``apeSees`` deck, so the replay warns and names each one.
+    """
 
 
 def _write_opensees_nodes_ndf(
@@ -399,6 +415,201 @@ def _path_stem(path: str) -> str:
     return stem or "model"
 
 
+def _constraint_replays_as_element(rec: Any, kind_cls: Any) -> bool:
+    """True iff the forward emit writes ``rec`` as an ``element`` line.
+
+    Those lines are archived in ``/opensees/element_meta``, and replay
+    re-emits them with the other elements, so the record is not skipped:
+    an RBE2 ``kinematic_coupling`` (``LadrunoKinematicCoupling``), a
+    ``rigid_body`` with ``as_element`` (``LadrunoRigidBody``), an
+    interpolation on the ``penalty_al`` route (``LadrunoEmbeddedNode``)
+    and a ``distributing`` RBE3 off the equation route
+    (``LadrunoDistributingCoupling``).  This mirrors the branches of
+    ``build.emit_mp_constraints`` and ``build._emit_one_interpolation``.
+    Every other kind goes out through a verb the deck zone has no replay
+    for, so it counts as skipped; an unknown kind counts as skipped too.
+    """
+    kind = rec.kind
+    if kind == kind_cls.KINEMATIC_COUPLING:
+        return True
+    if kind == kind_cls.RIGID_BODY:
+        return bool(rec.as_element)
+    return False
+
+
+def _interpolation_replays_as_element(rec: Any, kind_cls: Any) -> bool:
+    """:func:`_constraint_replays_as_element` for one interpolation row."""
+    if rec.enforce == "penalty_al":
+        return True
+    return bool(
+        rec.kind == kind_cls.DISTRIBUTING and rec.enforce != "equation"
+    )
+
+
+def _stage_mp_keys(stages: "Sequence[Any]") -> "frozenset[tuple[Any, ...]]":
+    """The keys of every MP line the stage blocks of ``stages`` re-emit.
+
+    A key is ``(bucket, *what it ties)`` over the four ``StageRecordRO``
+    MP buckets; :func:`_constraint_stage_keys` builds the matching side.
+    Keys carry the bucket and the tied nodes, not the declaration name.
+    The archived name is no identity: a ``tied_contact`` slave row has
+    ``name=None`` (only its parent is named), and a ``rigid_body`` group
+    writes its name on its first ``rigidLink`` only.
+    """
+    keys: "set[tuple[Any, ...]]" = set()
+    for s in stages:
+        for r in s.equal_dofs:
+            keys.add(("equal_dof", int(r.master), int(r.slave),
+                      tuple(int(d) for d in r.dofs)))
+        for r in s.rigid_links:
+            keys.add(("rigid_link", str(r.kind), int(r.master), int(r.slave)))
+        for r in s.rigid_diaphragms:
+            keys.add(("rigid_diaphragm", int(r.master),
+                      tuple(sorted(int(n) for n in r.slaves))))
+        for r in s.embedded_nodes:
+            keys.add(("embedded_node", int(r.cnode),
+                      tuple(int(n) for n in r.args)))
+    return frozenset(keys)
+
+
+def _pair_stage_keys(rec: Any, kind_cls: Any) -> "list[tuple[Any, ...]]":
+    """Stage-bucket keys of one ``NodePairRecord`` (empty: no bucket)."""
+    if rec.kind == kind_cls.EQUAL_DOF:
+        return [("equal_dof", int(rec.master_node), int(rec.slave_node),
+                 tuple(int(d) for d in rec.dofs))]
+    if rec.kind in (kind_cls.RIGID_BEAM, kind_cls.RIGID_ROD):
+        link = "beam" if rec.kind == kind_cls.RIGID_BEAM else "bar"
+        return [("rigid_link", link, int(rec.master_node),
+                 int(rec.slave_node))]
+    return []
+
+
+def _constraint_stage_keys(
+    rec: Any, kind_cls: Any,
+) -> "list[tuple[Any, ...]]":
+    """The stage-bucket keys a stage block writes for one node constraint.
+
+    Mirrors ``build._emit_rigid_links`` / ``_emit_equal_dofs`` /
+    ``_emit_rigid_diaphragms``.  An empty list means no stage bucket can
+    hold the record, so it never counts as stage-replayed.
+    """
+    kind = rec.kind
+    if kind == kind_cls.RIGID_BODY:
+        return [("rigid_link", "beam", int(rec.master_node), int(sn))
+                for sn in rec.slave_nodes]
+    if kind == kind_cls.RIGID_DIAPHRAGM:
+        return [("rigid_diaphragm", int(rec.master_node),
+                 tuple(sorted(int(n) for n in rec.slave_nodes)))]
+    if kind in (kind_cls.NODE_TO_SURFACE, kind_cls.NODE_TO_SURFACE_SPRING):
+        # The nested pairs, as the two emitters walk them: the rigid-kind
+        # links, then every phantom -> slave equalDOF.
+        keys: "list[tuple[Any, ...]]" = []
+        for pair in rec.rigid_link_records:
+            keys += _pair_stage_keys(pair, kind_cls)
+        for pair in rec.equal_dof_records:
+            keys.append(("equal_dof", int(pair.master_node),
+                         int(pair.slave_node),
+                         tuple(int(d) for d in pair.dofs)))
+        return keys
+    return _pair_stage_keys(rec, kind_cls)
+
+
+def _interpolation_stage_keys(rec: Any) -> "list[tuple[Any, ...]]":
+    """Stage-bucket key of one non-element interpolation row: its
+    ``embeddedNode`` line (none on the equation route, a ledger verb)."""
+    if rec.enforce == "equation":
+        return []
+    return [("embedded_node", int(rec.slave_node),
+             tuple(int(n) for n in rec.master_nodes))]
+
+
+def _skipped_replay_streams(
+    fem: Any, *, stage_mp_keys: "frozenset[tuple[Any, ...]]",
+) -> "dict[str, Counter[str]]":
+    """Return ``{stream: Counter(kind -> count)}`` for every non-empty
+    neutral-zone stream that :func:`_replay_into` does not re-emit.
+
+    ``stage_mp_keys`` (:func:`_stage_mp_keys`) holds the MP lines that a
+    staged archive's stage blocks re-emit.  A record counts as replayed
+    there only when every line its fan-out writes is among them, matched
+    on bucket and nodes, so a stage that claims the equalDOF named ``x``
+    does not also excuse a rigidDiaphragm named ``x``.
+
+    The streams are read without defaults: a ``fem`` that lacks one fails
+    here rather than passing for empty.
+    """
+    out: "dict[str, Counter[str]]" = {}
+
+    def _staged(keys: "list[tuple[Any, ...]]") -> bool:
+        return bool(keys) and all(k in stage_mp_keys for k in keys)
+
+    node_set = fem.nodes.constraints
+    kind_cls = node_set.Kind
+    nodes_skipped: "Counter[str]" = Counter(
+        str(rec.kind) for rec in node_set
+        if not _constraint_replays_as_element(rec, kind_cls)
+        and not _staged(_constraint_stage_keys(rec, kind_cls))
+    )
+    if nodes_skipped:
+        out["fem.nodes.constraints"] = nodes_skipped
+
+    # interpolations() expands tied_contact / mortar into their slave rows,
+    # as the forward emit does, so each slave is matched on its own.
+    surface_skipped: "Counter[str]" = Counter(
+        str(rec.kind) for rec in fem.elements.constraints.interpolations()
+        if not _interpolation_replays_as_element(rec, kind_cls)
+        and not _staged(_interpolation_stage_keys(rec))
+    )
+    if surface_skipped:
+        out["fem.elements.constraints"] = surface_skipped
+
+    # An interface on an equal-ndf pair is a zeroLength plus its materials,
+    # all replayed; a mixed-ndf pair also needs a phantom node and its
+    # equalDOF, which replay has no record for.  No stage match is tried:
+    # the writer refuses a stage phantom node (``set_stage_records``), so a
+    # stage-claimed phantom interface never reaches an archive.
+    interfaces_skipped: "Counter[str]" = Counter(
+        str(rec.kind) for rec in fem.elements.interfaces
+        if rec.phantom_node is not None
+    )
+    if interfaces_skipped:
+        out["fem.elements.interfaces"] = interfaces_skipped
+
+    # The H5 emitter keeps no deck record for these at all (ledger verbs).
+    for stream, recs in (
+        ("fem.elements.embed_ties", fem.elements.embed_ties),
+        ("fem.elements.contacts", fem.elements.contacts),
+        ("fem.elements.contact_planes", fem.elements.contact_planes),
+    ):
+        if recs:
+            out[stream] = Counter({"record": len(recs)})
+    return out
+
+
+def _warn_skipped_replay_streams(
+    fem: Any, *, stage_mp_keys: "frozenset[tuple[Any, ...]]",
+) -> None:
+    """Warn :class:`ReplaySkippedStreamWarning` iff ``fem`` carries a
+    stream that replay does not re-emit, naming each stream and count."""
+    skipped = _skipped_replay_streams(fem, stage_mp_keys=stage_mp_keys)
+    if not skipped:
+        return
+    parts = []
+    for stream, kinds in skipped.items():
+        detail = ", ".join(f"{k}: {n}" for k, n in sorted(kinds.items()))
+        parts.append(f"{stream} ({detail})")
+    warnings.warn(
+        "Deck replay does not re-emit "
+        f"{len(skipped)} stream(s) the model carries: "
+        + "; ".join(parts)
+        + ". The replayed deck leaves these constraints and ties out, so "
+        "it differs from the forward apeSees deck. For a faithful deck, "
+        "load FEMData.from_h5(path) and emit it through apeSees(fem).",
+        ReplaySkippedStreamWarning,
+        stacklevel=3,
+    )
+
+
 def _replay_elements_bracketed(
     emitter: Any,
     recs: "list[Any]",
@@ -466,6 +677,7 @@ def _replay_into(
     initial_stress_tags: Any = None,
     reinforce_name_to_tag: "dict[str, int] | None" = None,
     deck_ordering: bool = True,
+    stage_mp_keys: "frozenset[tuple[Any, ...]]" = frozenset(),
 ) -> None:
     """Walk a typed-record graph and re-emit it through ``emitter``.
 
@@ -553,11 +765,23 @@ def _replay_into(
         :class:`BuiltModel` from :meth:`apeSees.build` directly and
         not round-trip through H5.
 
+        **Skipped streams warn (D8, #1412).**  When ``fem`` is given (the
+        tcl / py / live deck targets), every neutral-zone stream this
+        helper has no replay for is named, with its count, in one
+        :class:`ReplaySkippedStreamWarning` before anything is emitted.
+        ``stage_mp_keys`` is passed by :func:`_replay_staged_into`: the MP
+        lines its stage blocks re-emit, which are therefore not skipped.
+        The H5 re-emit path passes no ``fem``; its archive keeps those
+        streams in the neutral zone that ``_compose_model_h5`` rewrites.
+
     Parameters mirror :class:`apeGmsh.opensees._internal.typed_records`
     field names; see :mod:`apeGmsh.opensees.opensees_model` for the
     canonical instantiation pattern.
     """
     from .build import node_coords_as_floats
+
+    if fem is not None:
+        _warn_skipped_replay_streams(fem, stage_mp_keys=stage_mp_keys)
 
     # 1. Model directive.
     emitter.model(ndm=int(ndm), ndf=int(ndf))
@@ -1085,11 +1309,14 @@ def _replay_staged_into(
 
     # 1. Global prefix — _replay_into with stage-owned topology filtered
     # out and the shared allocator threaded for any GLOBAL initial_stress.
+    # The stage blocks below re-emit their claimed MP constraints, so the
+    # skipped-stream warning must not count those (D8, #1412).
     _replay_into(
         emitter,
         skip_node_tags=owned_node_tags,
         skip_element_tags=owned_element_tags,
         initial_stress_tags=tags,
+        stage_mp_keys=_stage_mp_keys(stages),
         **replay_kwargs,
     )
 
