@@ -39,6 +39,8 @@ from typing import TYPE_CHECKING, ClassVar, NamedTuple
 from .tag_allocator import TagAllocator, TagLawError
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
+
     from ..apesees import BuiltModel
     from .build import ContactPlan, ElementPlanRows, TransformFanout
     from .types import Element, GeomTransf
@@ -231,12 +233,258 @@ class TransformTagPlan(FamilyTagPlan):
         return fanout
 
 
+#: Where an emit writes a region: the site's kind and its scope. The scope
+#: is ``None`` for a model-wide pool, ``id(stage)`` for a stage's pool, and
+#: ``id(spec)`` for a recorder.
+RegionSite = tuple[str, "int | None"]
+
+#: The kinds of region site, and what keys a region at each one:
+#:
+#: ``named``     a named region (``ops.region`` / ``s.region``), by name;
+#: ``rayleigh``  a region-scoped Rayleigh, by ``(record index, on index)``;
+#: ``damping``   a damping attach, by ``(record index, on index)``;
+#: ``recorder``  a filtered recorder, by region key (``filter``, ``energy``).
+REGION_SITE_KINDS: frozenset[str] = frozenset(
+    {"named", "rayleigh", "damping", "recorder"})
+
+
+#: Every region name a named-region site declares, in first-seen order:
+#: ``(name, merged member nodes, first rank)``. The first rank is the
+#: runtime rank a partitioned emit numbers the region on (the first, in
+#: partition order, that holds a member), and ``None`` on a flat emit or
+#: when no rank holds one.
+NamedMembers = tuple[tuple[str, tuple[int, ...], "int | None"], ...]
+
+
+class PlannedRegion(NamedTuple):
+    """One planned ``region`` tag: the site that writes it, its key there."""
+
+    site: RegionSite
+    key: object
+    tag: int
+
+
+class NamedRegion(NamedTuple):
+    """A named region as the plan holds it: its merged member nodes, in
+    first-seen order, its planned tag and, under a partitioned emit, the
+    rank it was numbered on.
+
+    ``tag`` is ``None`` for a region no emit writes (it has no members
+    or, under a partitioned emit, no rank holds one). :meth:`planned_tag`
+    and :meth:`tag_on_rank` are how a writer reads it.
+    """
+
+    name: str
+    nodes: tuple[int, ...]
+    tag: int | None
+    first_rank: int | None = None
+
+    def tag_on_rank(self, rank: int) -> int:
+        """The tag ``rank``, which holds members of this region, writes.
+
+        The plan numbered the region on its first holder rank, so no
+        earlier rank may hold a member.
+        """
+        if self.first_rank is None or rank < self.first_rank:
+            raise TagLawError(
+                f"named region {self.name!r} has members on rank {rank}, "
+                f"but the region plan numbered it on rank {self.first_rank}: "
+                "the plan was not made for this emit (ADR 0114 D4, amended)."
+            )
+        return self.planned_tag()
+
+    def check_unheld_on(self, rank: int) -> None:
+        """Raise if the plan numbered this region on ``rank``, which holds
+        none of its members."""
+        if rank == self.first_rank:
+            raise TagLawError(
+                f"the region plan numbered named region {self.name!r} on "
+                f"rank {rank}, which holds none of its members: the plan "
+                "was not made for this emit (ADR 0114 D4, amended)."
+            )
+
+    def planned_tag(self) -> int:
+        """The tag to write; raises if the plan gave this region none."""
+        if self.tag is None:
+            raise TagLawError(
+                f"the region plan gives named region {self.name!r} no tag, "
+                "but this emit writes it: the plan was not made for this "
+                "emit (ADR 0114 D4, amended)."
+            )
+        return self.tag
+
+
+def plan_regions(
+    sites: "Iterable[tuple[RegionSite, Sequence[object]]]",
+    tags: TagAllocator,
+) -> tuple[PlannedRegion, ...]:
+    """Mint one region tag per key of every site, in order.
+
+    The region allocation loop, moved out of the emit (ADR 0114 D4,
+    amended). ``sites`` are the region sites of one emit, in the order it
+    writes them, each with its keys in the order it mints them
+    (``BuiltModel._region_sites``). The build's tag plan runs it once per
+    emit mode with the planner allocator; a recorder handed a plain
+    allocator runs it over its own site
+    (:meth:`~apeGmsh.opensees.recorder.FilterableRecorder.planned_region_tags`).
+    """
+    rows: list[PlannedRegion] = []
+    for site, keys in sites:
+        if site[0] not in REGION_SITE_KINDS:
+            raise TagLawError(
+                f"plan_regions: unknown region site {site[0]!r}; the kinds "
+                f"are {sorted(REGION_SITE_KINDS)}."
+            )
+        for key in keys:
+            rows.append(PlannedRegion(site, key, tags.allocate("region")))
+    return tuple(rows)
+
+
 @dataclass(frozen=True, slots=True)
 class RegionTagPlan(FamilyTagPlan):
-    """Named regions, damping regions and recorder filter/energy regions."""
+    """Named regions, damping regions and recorder filter/energy regions.
+
+    ``regions`` is :func:`plan_regions`'s result, made once by
+    :func:`plan_tags` over ``BuiltModel._region_sites``: every region tag
+    the mode's emit writes, in the order it was minted, keyed by its site.
+    ``named`` holds, per named-region site, every declared region name in
+    first-seen order with its merged member nodes, so the emit writes the
+    members the plan resolved. ``partitioned`` says the named regions were
+    numbered rank by rank, each on the first rank that holds a member.
+    ``fem`` is the FEM snapshot it was made over. The emit's writers read
+    their tags here (:meth:`tags_for`, :meth:`named_for`) and mint none.
+    """
 
     FAMILY: ClassVar[str] = "regions"
     KINDS: ClassVar[frozenset[str]] = frozenset({"region"})
+    MIGRATED: ClassVar[bool] = True
+
+    regions: tuple[PlannedRegion, ...] | None = field(
+        default=None, compare=False)
+    named: "Mapping[RegionSite, NamedMembers]" = field(
+        default_factory=dict, compare=False)
+    partitioned: bool = False
+    fem: object = field(default=None, compare=False)
+    _by_site: "dict[RegionSite, dict[object, int]]" = field(
+        default_factory=dict, init=False, compare=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.rows:
+            raise TagLawError(
+                "regions: the region plan derives its rows from its planned "
+                "regions; pass regions, not rows."
+            )
+        if self.regions is None:
+            return
+        last = 0
+        for row in self.regions:
+            if row.site[0] not in REGION_SITE_KINDS:
+                raise TagLawError(
+                    f"regions: unknown region site {row.site[0]!r}.")
+            if row.tag <= last:
+                raise TagLawError(
+                    f"regions: tag {row.tag} of {row.site}/{row.key!r} "
+                    f"follows tag {last}; the plan holds its regions in the "
+                    "order it minted them, so its tags only rise."
+                )
+            last = row.tag
+            at_site = self._by_site.setdefault(row.site, {})
+            if row.key in at_site:
+                raise TagLawError(
+                    f"regions: {row.site}/{row.key!r} is planned twice.")
+            at_site[row.key] = row.tag
+        for site, at_site in self._by_site.items():
+            if site[0] != "named":
+                continue
+            members = {
+                name: nodes for name, nodes, _ in self.named.get(site, ())}
+            for name in at_site:
+                if not isinstance(name, str) or not members.get(name):
+                    raise TagLawError(
+                        f"regions: named region {name!r} has a tag but no "
+                        f"members at {site}.")
+
+    def _planned(self, fem: object) -> tuple[PlannedRegion, ...]:
+        if self.regions is None:
+            raise TagLawError(
+                "regions: this plan carries no regions; plan_tags plans "
+                "them for every mode (ADR 0114 D4, amended)."
+            )
+        if fem is not self.fem:
+            raise TagLawError(_FOREIGN_PLAN.format(family="region"))
+        return self.regions
+
+    def stream(self) -> tuple[TagRow, ...]:
+        """One ``("region", tag)`` row per planned region, in mint order."""
+        return tuple(("region", row.tag) for row in self._planned(self.fem))
+
+    def tags_for(
+        self, fem: object, site: RegionSite, keys: "Sequence[object]",
+    ) -> dict[object, int]:
+        """The planned tag of each of ``keys`` at ``site``.
+
+        ``keys`` are the regions this emit writes at ``site``, in the order
+        it writes them, derived from the records it walks. The plan must
+        hold exactly those keys there, in that order (a damping pool and a
+        recorder write their regions in the order the plan minted them): a
+        plan made for other records, one that dropped a region, or one
+        that swapped two, raises :class:`TagLawError`.
+        """
+        self._planned(fem)
+        planned = self._by_site.get(site, {})
+        if list(planned) != list(keys):
+            raise TagLawError(
+                f"the region plan holds {list(planned)} at {site}, but this "
+                f"emit writes {list(keys)}: the plan was not made for this "
+                "emit (ADR 0114 D4, amended)."
+            )
+        return dict(planned)
+
+    def named_for(
+        self, fem: object, site: RegionSite, names: "Sequence[str]",
+    ) -> tuple[NamedRegion, ...]:
+        """The named regions of ``site``, in first-seen order.
+
+        ``names`` are the region names this emit's records declare at
+        ``site``, in first-seen order; the plan must hold exactly them,
+        in that order. Each comes with its planned members and tag.
+
+        A flat or split emit numbers the names that have members in
+        first-seen order. A partitioned emit numbers them rank by rank,
+        each on its first holder rank, in first-seen order within a rank;
+        its writers check each first rank (:meth:`NamedRegion.tag_on_rank`,
+        :meth:`NamedRegion.check_unheld_on`). Either way the planned tags
+        must be exactly those names', rising in that order: a plan that
+        dropped or swapped two raises :class:`TagLawError`.
+        """
+        self._planned(fem)
+        members = tuple(self.named.get(site, ()))
+        if [name for name, _, _ in members] != list(names):
+            raise TagLawError(
+                f"the region plan holds the named regions "
+                f"{[name for name, _, _ in members]} at {site}, but this "
+                f"emit declares {list(names)}: the plan was not made for "
+                "this emit (ADR 0114 D4, amended)."
+            )
+        if self.partitioned:
+            ranked = [(first, i, name)
+                      for i, (name, _, first) in enumerate(members)
+                      if first is not None]
+            numbered = [name for _, _, name in sorted(ranked)]
+        else:
+            numbered = [name for name, nodes, _ in members if nodes]
+        planned = self._by_site.get(site, {})
+        if list(planned) != numbered:
+            raise TagLawError(
+                f"the region plan numbers the named regions {list(planned)} "
+                f"at {site}, but this emit numbers {numbered}, in that "
+                "order: the plan was not made for this emit (ADR 0114 D4, "
+                "amended)."
+            )
+        return tuple(
+            NamedRegion(name, nodes, planned.get(name), first)
+            for name, nodes, first in members
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -552,6 +800,13 @@ def plan_tags(bm: BuiltModel, mode: TagMode) -> TagPlan:
     # it. No other family mints ``contactSurface`` or ``contact``.
     contacts = ContactTagPlan(contacts=_plan_contacts(bm, mode, tags))
 
+    # Regions: every named, damping and recorder region, in the order its
+    # mode's emit writes them. No other family mints ``region``.
+    sites, named = bm._region_sites(mode, ordered)
+    regions = RegionTagPlan(
+        regions=plan_regions(sites, tags), named=named,
+        partitioned=mode.partitioned, fem=bm.fem)
+
     # The other families are pending: their tags are still minted at
     # emit time, from TagPlan.emit_allocator().
     tags.freeze()
@@ -560,7 +815,7 @@ def plan_tags(bm: BuiltModel, mode: TagMode) -> TagPlan:
         allocator=tags,
         elements=elements,
         transforms=transforms,
-        regions=RegionTagPlan(),
+        regions=regions,
         parameters=ParameterTagPlan(),
         mp_elements=MPElementTagPlan(),
         interfaces=InterfaceTagPlan(),
