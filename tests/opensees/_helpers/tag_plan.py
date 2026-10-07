@@ -1,11 +1,9 @@
-"""Tag-plan allocators for direct test calls of the ``build.py`` writers.
+"""Tag plans for direct test calls of the ``build.py`` writers.
 
-The MP-element, interface and contact writers read their tags from the
-build's tag plan, through the emit allocator a :class:`TagPlan` forks
-(ADR 0114 D4, amended). Until K1-3d S6 they also accept a plain
-:class:`TagAllocator` and plan their own rows from it; S6 removes that
-fallback, so a test that calls a writer directly hands it a plan's emit
-allocator instead (K1-3d S6a, #1494).
+The MP-element, interface, contact and recorder-region writers read their
+tags from the build's :class:`TagPlan`, which every emit helper takes in
+place of an allocator (ADR 0114 D4, amended; K1-3d S6a #1494, S6 #1458),
+so a test that calls a writer directly hands it a plan.
 
 :func:`emit_tags` makes that plan for a FEM snapshot the way
 :func:`~apeGmsh.opensees._internal.tag_plan.plan_tags` makes it for a
@@ -75,8 +73,8 @@ def emit_tags(
     stages: Iterable[StageClaims] = (),
     recorders: Iterable[Any] = (),
     tags: TagAllocator | None = None,
-) -> TagAllocator:
-    """The emit allocator of a flat emit's tag plan over ``fem``.
+) -> TagPlan:
+    """The tag plan of a flat emit over ``fem``.
 
     The plan holds the MP elements, interfaces and contacts a flat emit
     of ``fem`` writes, in the order it writes them: the global
@@ -90,8 +88,7 @@ def emit_tags(
     ``tags`` seeds the planner: the plan continues its counters, as a
     bridge plan continues the seeded primitive and element tags. A fresh
     allocator is used when it is ``None``. The planner is frozen once
-    planned; the returned fork continues it and refuses a mint of any
-    family the plan holds.
+    planned, so the plan mints nothing.
     """
     planner = TagAllocator() if tags is None else tags
     inputs = _PlanInputs(fem=fem, stage_records=tuple(stages))
@@ -105,7 +102,7 @@ def emit_tags(
         planner,
     )
     planner.freeze()
-    plan = TagPlan(
+    return TagPlan(
         mode=mode,
         allocator=planner,
         elements=ElementTagPlan(),
@@ -116,7 +113,37 @@ def emit_tags(
         interfaces=InterfaceTagPlan(interfaces=interfaces),
         contacts=ContactTagPlan(contacts=contacts),
     )
-    return plan.emit_allocator()
+
+
+def parameter_plan(
+    sites: Sequence[Any], *, partitioned: bool = False,
+) -> TagPlan:
+    """A staged emit's tag plan holding only the parameter ``sites``.
+
+    The sites (``build.ParameterSite``, from ``initial_stress_sites`` or
+    ``parameter_flip_sites``) are numbered by ``build.plan_parameters``,
+    the loop :func:`~apeGmsh.opensees._internal.tag_plan.plan_tags` runs,
+    from a fresh planner, so a parameter writer (``emit_activate_absorbing``,
+    ``emit_update_parameters``) can be called directly with a plan.
+    """
+    from apeGmsh.opensees._internal.build import plan_parameters
+
+    planner = TagAllocator()
+    lines = plan_parameters(sites, planner)
+    planner.freeze()
+    return TagPlan(
+        mode=TagMode(split=False, partitioned=partitioned, staged=True),
+        allocator=planner,
+        elements=ElementTagPlan(),
+        transforms=TransformTagPlan(),
+        regions=RegionTagPlan(),
+        parameters=ParameterTagPlan(
+            lines=lines,
+            owners=tuple((site.record, site.rank) for site in sites)),
+        mp_elements=MPElementTagPlan(),
+        interfaces=InterfaceTagPlan(),
+        contacts=ContactTagPlan(),
+    )
 
 
 class _NodeConstraints:
