@@ -21,6 +21,7 @@ import os
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence, TypeVar
 
+from ._internal.artifact_write import BridgeArtifactWriter
 from ._internal.build import (
     BridgeError,
     DampingAttachRecord,
@@ -7686,6 +7687,12 @@ class apeSees(_ContactQueryMixin, _ModalMixin, _FrfMixin, _ExplicitMixin):
         above the largest FEM id. ``"fem"`` refuses an id ``<= 0`` and
         an element fanned out by two declarations (``BridgeError`` at
         emit).
+    _artifacts
+        ADR 0112 D1: every terminal emit and live build leaves the full
+        ``model.h5`` at the session's conventional path
+        (:mod:`~apeGmsh.opensees._internal.artifact_write`).  ``False``
+        is for the library's own bridges only (importers, ``strut_tie``,
+        the emit-cost bench); it is not a user-facing opt-out.
     """
 
     def __init__(
@@ -7695,6 +7702,7 @@ class apeSees(_ContactQueryMixin, _ModalMixin, _FrfMixin, _ExplicitMixin):
         default_orientation: Orientation | None | _UnsetType = _UNSET,
         opensees: "OpenSeesTarget | None" = None,
         element_tags: ElementTagMode = "sequential",
+        _artifacts: bool = True,
     ) -> None:
         if element_tags not in ELEMENT_TAG_MODES:
             raise ValueError(
@@ -7725,6 +7733,9 @@ class apeSees(_ContactQueryMixin, _ModalMixin, _FrfMixin, _ExplicitMixin):
         # ``opensees/<kind>/<name|#k>``; ``h5()`` appends the table to
         # the snapshot's own ``/provenance``.  Never hashed.
         self._provenance = ProvenanceStore()
+        # ADR 0112 D1 (V2d-4b): the automatic model.h5 write, called once
+        # at the end of each terminal emit / live build (not ``h5()``).
+        self._artifacts = BridgeArtifactWriter(enabled=_artifacts)
         # Call ordinal of ``imposed_displacement``: the ``<name>`` of its
         # synthesised records when the call gives no ``name=``.
         self._imposed_displacement_calls = 0
@@ -8782,6 +8793,7 @@ class apeSees(_ContactQueryMixin, _ModalMixin, _FrfMixin, _ExplicitMixin):
         # the in-process openseespy session stays alive after analyze returns.
         self._live_emitter = live_emitter
         bm.emit(live_emitter)
+        self._artifacts.after_emit(self)
         if profile is not None:
             start_flags: list[str] = []
             if profile_deep:
@@ -9061,6 +9073,7 @@ class apeSees(_ContactQueryMixin, _ModalMixin, _FrfMixin, _ExplicitMixin):
         elif not stream:
             with open(path, "w", encoding="utf-8") as f:
                 emitter.write_to(f)
+        self._artifacts.after_emit(self)
 
         if not run:
             return None
@@ -9269,6 +9282,7 @@ class apeSees(_ContactQueryMixin, _ModalMixin, _FrfMixin, _ExplicitMixin):
 
         with open(path, "w", encoding="utf-8") as f:
             emitter.write_to(f)
+        self._artifacts.after_emit(self)
 
     def _guard_modal_deck_constraint_handler(self) -> None:
         """Refuse a modal deck whose model needs a constraint handler
@@ -9496,6 +9510,7 @@ class apeSees(_ContactQueryMixin, _ModalMixin, _FrfMixin, _ExplicitMixin):
 
         with open(path, "w", encoding="utf-8") as f:
             emitter.write_to(f)
+        self._artifacts.after_emit(self)
 
     def py(
         self,
@@ -9550,6 +9565,7 @@ class apeSees(_ContactQueryMixin, _ModalMixin, _FrfMixin, _ExplicitMixin):
             emitter.profiler(_verb, *_vargs)
         with open(path, "w", encoding="utf-8") as f:
             emitter.write_to(f)
+        self._artifacts.after_emit(self)
 
         if not run:
             return None
@@ -9583,6 +9599,7 @@ class apeSees(_ContactQueryMixin, _ModalMixin, _FrfMixin, _ExplicitMixin):
         bm = self.build()
         emitter = LiveOpsEmitter(wipe=wipe)
         bm.emit(emitter)
+        self._artifacts.after_emit(self)
 
     def run_remote(
         self,

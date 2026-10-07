@@ -32,7 +32,12 @@ rulings of 2026-10-05 on PR #1439:
   warning naming both files, so the pair stays consistent.
 
 A foreign file, an existing one under ``overwrite=False``, or an older
-file holding a zone the write would drop keep V2b's warnings (#1305).
+file holding a zone the write would drop keep V2b's warnings (#1305),
+with one exception ruled on #1307 (2026-10-06): a file whose
+``/provenance`` names this run's script is this script's own earlier
+output, and a script run twice replaces it, fuller or not, so
+``model.h5`` and ``<stem>.geometry.h5`` end the run with one
+``session_id``.
 An explicit ``apeSees.h5(path)`` never consults this module (P7): it
 keeps its ``'w'`` behaviour, because it is the user's intent.
 """
@@ -62,11 +67,13 @@ __all__ = [
     "artifact_identity",
     "artifact_target_is_ours",
     "artifact_verdict",
+    "bridge_view_for",
     "content_hash",
     "main_script",
     "mpi_rank",
     "neutral_content_hash",
     "provenance_scripts",
+    "record_bridge_write",
 ]
 
 #: Environment variables an MPI launcher (or ``srun``) sets to the rank
@@ -96,6 +103,38 @@ _NOTEBOOK_CELL = re.compile(r"(^|[\\/])ipykernel_\d+[\\/]|^<ipython-input-")
 #: the function, the writer's private method, its public caller
 #: (``end()``, ``tcl()``, ...), the user's call.
 _STACKLEVEL = 4
+
+#: The extraction view (``FEMData.extract_view``: ``(dim,
+#: remove_orphans)`` of the ``from_gmsh`` call) of the snapshot a bridge
+#: last archived at each resolved target, by ``session_id``, for this
+#: process (:func:`record_bridge_write`).  The session's ``end()`` asks
+#: :func:`bridge_view_for` so that P4 compares the file with the same
+#: view re-extracted now: a ``get_fem_data(dim=...)`` view narrower than
+#: the session's own is then equal content, while a declaration made
+#: after the bridge's write still differs and still warns.
+_BRIDGE_WRITES: dict[Path, tuple[str, tuple[int | None, bool] | None]] = {}
+
+
+def record_bridge_write(
+    target: "str | Path", session_id: str,
+    view: tuple[int | None, bool] | None,
+) -> None:
+    """Note that the bridge of ``session_id`` wrote the full ``model.h5``
+    at ``target`` in this process from a snapshot extracted as ``view``
+    (the bridge's automatic write calls this after its atomic replace)."""
+    _BRIDGE_WRITES[Path(target).resolve()] = (session_id, view)
+
+
+def bridge_view_for(
+    target: "str | Path", session_id: str,
+) -> tuple[int | None, bool] | None:
+    """The view the bridge of ``session_id`` archived at ``target`` in this
+    process, or ``None`` when no such bridge wrote it (or it wrote a
+    snapshot no session extracted)."""
+    entry = _BRIDGE_WRITES.get(Path(target).resolve())
+    if entry is None or entry[0] != session_id:
+        return None
+    return entry[1]
 
 
 # ---------------------------------------------------------------------------
@@ -389,11 +428,12 @@ def artifact_verdict(
       neutral content equals what the write would produce (P4), and
       ``"refuse"`` with one warning when it holds different content (a
       filtered ``get_fem_data``, or a change after it was written);
-    * **another run's file**: it holds no zone the write would drop
-      (V2b's warning otherwise), and, unless ``explicit``, its
-      ``/provenance`` names a script in ``scripts`` or names no script
-      (P3; a parameter sweep that keeps each run sets ``model_name``
-      per run, and so does each notebook, whose cells name no script).
+    * **another run's file**: its ``/provenance`` names a script in
+      ``scripts`` (the same script, run again: replaced whatever zones
+      it holds), or it holds no zone the write would drop (V2b's warning
+      otherwise) and, unless ``explicit``, names no script (P3; a
+      parameter sweep that keeps each run sets ``model_name`` per run,
+      and so does each notebook, whose cells name no script).
 
     Every ``"refuse"`` is one warning (``UserWarning``); the file is
     never written elsewhere.
@@ -417,6 +457,11 @@ def artifact_verdict(
     if file_session == session_id:
         if not dropped:
             return "write"
+        # This run's fuller file (the bridge's): kept when its neutral
+        # content equals what the caller would write now.  A session
+        # whose bridge archived a ``get_fem_data(dim=...)`` view hands in
+        # that view's content (:func:`bridge_view_for`), so a narrower
+        # view is equal and a declaration made after the write differs.
         if artifact_content_hash(target) == content():
             return "keep"
         return _refuse(
@@ -426,14 +471,19 @@ def artifact_verdict(
             f"Emit again from the session's snapshot, or pass save_to=.",
             skips,
         )
-    if dropped:
+    # P3, a script run twice: the file's ``/provenance`` names this run's
+    # script, so the file is this script's earlier output, fuller or not,
+    # and the run replaces it (the bridge then writes the fuller file
+    # again, and ``model.h5`` and its sibling carry one ``session_id``).
+    same_script = bool(file_scripts & scripts)
+    if dropped and not same_script:
         return _refuse(
             f"{target} holds the {', '.join(dropped)} zone(s) that the "
             f"automatic write would drop; not overwritten. Write that "
             f"file under another name, or pass save_to=.",
             skips,
         )
-    if not explicit and file_scripts and not (file_scripts & scripts):
+    if not explicit and file_scripts and not same_script:
         return _refuse(
             f"{target} was written by another script "
             f"({', '.join(sorted(file_scripts))}); not overwritten. Set "

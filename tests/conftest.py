@@ -96,6 +96,26 @@ def g():
     session.end()
 
 
+@pytest.fixture(autouse=True)
+def _artifact_dir_per_test(_artifact_dir, tmp_path_factory, monkeypatch):
+    """Each test's automatic artifacts go to its own directory.
+
+    The session-wide pin above keeps them out of the repository; this one
+    keeps them out of each other's way.  Sessions in different tests
+    share names (``g`` is always ``test``), and the bridge's automatic
+    write (#1307) leaves the full ``model.h5`` (with ``/opensees``) at
+    the conventional path, which a later test's ``end()`` would refuse
+    to replace, with a warning, once per test.  The directory is a
+    sibling of the test's ``tmp_path``, never inside it: tests point
+    ``APEGMSH_ARTIFACT_DIR`` at ``tmp_path`` and assert its listing.
+    Module- and session-scoped fixtures still see the shared directory,
+    and a test that sets the variable itself overrides this.
+    """
+    out = tmp_path_factory.mktemp("artifacts_per_test")
+    monkeypatch.setenv("APEGMSH_ARTIFACT_DIR", str(out))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Phase 8 (ADR 0020 INV-1) — ``model=`` is required on every
 # :class:`Results` constructor.  Tests use this helper to build an
