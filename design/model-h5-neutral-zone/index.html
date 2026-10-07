@@ -1,0 +1,4736 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Gmsh wrapper for structural FEM workflows with parts, constraints, loads, mass, and OpenSees integration.">
+      
+      
+      
+        <link rel="canonical" href="https://nmorabowen.github.io/apeGmsh/design/model-h5-neutral-zone/">
+      
+      
+        <link rel="prev" href="../results/">
+      
+      
+        <link rel="next" href="../../api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>The model.h5 neutral zone - apeGmsh</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-modelh5-neutral-zone" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="apeGmsh" class="md-header__button md-logo" aria-label="apeGmsh" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            apeGmsh
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The model.h5 neutral zone
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/nmorabowen/apeGmsh" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    nmorabowen/apeGmsh
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="apeGmsh" class="md-nav__button md-logo" aria-label="apeGmsh" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    apeGmsh
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/nmorabowen/apeGmsh" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    nmorabowen/apeGmsh
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../tutorials/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/learning-path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The learning path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/first-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Your first model in 10 minutes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/plate-in-tension/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A plate in tension
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/beam-and-composites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A simply-supported beam, the apeGmsh way
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/save-reload-view/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Save, reload, view
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../how-to/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-to (Recipes)
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-to (Recipes)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geometry & CAD
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Geometry & CAD
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/import-step/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Import & heal a STEP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Build & assemble
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Build & assemble
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/save-reload/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Save & reload a model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/compose-modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compose modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Physics
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/gravity/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apply gravity / self-weight
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/face-pressure/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apply a face pressure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/point-load/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a point load
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/supports-bcs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix supports & BCs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/tie-meshes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tie non-matching meshes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solve
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Solve
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/section-properties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compute section properties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/author-a-section-document/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Author a section document
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/export-script/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export to Tcl / openseespy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/checkpoint-resume/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Checkpoint & resume an analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/footfall-vibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluate footfall vibration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Results
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/read-results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Read displacement & reactions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/render-a-still/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Render a deformed shape or contour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/results-mpco/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get results via MPCO
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/choose-results-strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choose a results strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/studio-habitat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drive Studio / MCP habitat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../concepts/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/mental-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core mental model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/session/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The session
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geometry & meshing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Geometry & meshing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/geometry-and-cad/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geometry & CAD
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/meshing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Meshing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/gmsh-under-the-hood/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gmsh under the hood
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/selection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Selection & queries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building models
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Building models
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/parts-and-assembly/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts & assembly
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/sections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Physics
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/constraints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constraints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/loads-and-masses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Loads & masses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Solver bridge
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Solver bridge
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/fem-broker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The FEM broker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/opensees-bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The OpenSees bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/backend-capabilities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend capabilities
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../examples/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worked examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Worked examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/portal-frame/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Portal frame (2D)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/modal-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modal analysis (cantilever)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/fiber-moment-curvature/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fiber sections & moment–curvature
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/multipart-assembly/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-part assembly
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/tie-non-matching-meshes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tie non-matching meshes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/step-plate-with-hole/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    STEP import: plate with a hole
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/results-strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing a results strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/compose-modules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compose modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/pushover-steel-frame/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pushover of a steel moment frame
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/plane-wave-ssi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plane-wave SSI: absorbing soil column
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/staged-gravity-ssi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged SSI: gravity then the absorbing flip
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/moment-tensor-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moment-tensor seismic source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../principles/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../broker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The broker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parts-assembly/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts & assembly internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The model.h5 neutral zone
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The model.h5 neutral zone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#who-writes-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who writes it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version rule
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Version rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-floor-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The floor rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-minor-bump-means-for-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a minor bump means for you
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zone-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zone map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conventions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#meta" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /meta
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="/meta">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metalineage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /meta/lineage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#elements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /elements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#index-base-read-this-carefully" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Index base — read this carefully
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#physical_groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /physical_groups
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /labels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mesh_selections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /mesh_selections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-always-there" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is always there
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#for-consumers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For consumers
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/session/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Session (apeGmsh)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/parts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/mesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mesh
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/constraints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constraints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/loads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Loads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/masses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Masses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/sections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/fem/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FEM Broker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/opensees/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenSees
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/results/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/results-session/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results session
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/selection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Selection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/viewers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Viewers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/viz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Viz
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../migration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#who-writes-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who writes it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version rule
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Version rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-floor-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The floor rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-minor-bump-means-for-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a minor bump means for you
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zone-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zone map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conventions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#meta" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /meta
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="/meta">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metalineage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /meta/lineage
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#elements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /elements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#index-base-read-this-carefully" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Index base — read this carefully
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#physical_groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /physical_groups
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#labels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /labels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mesh_selections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        /mesh_selections
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-always-there" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is always there
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#for-consumers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For consumers
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="the-modelh5-neutral-zone">The <code>model.h5</code> neutral zone<a class="headerlink" href="#the-modelh5-neutral-zone" title="Permanent link">&para;</a></h1>
+<p><code>model.h5</code> is apeGmsh's canonical model archive. Its <strong>neutral zone</strong> —
+everything at the file root that is not under <code>/opensees/</code> — describes a
+meshed model without reference to any solver: where the nodes are, which
+elements connect them, and which named sets group them.</p>
+<p>This page publishes that zone as a <strong>contract</strong>. It is written for a
+consumer that cannot import apeGmsh and does not have h5py — a browser
+reader over <code>h5wasm</code>, a Rust importer, another meshing tool. Everything
+below is what the writer emits <strong>today</strong>, verified against
+<code>mesh/_femdata_h5_io.py</code> and against the committed golden fixture.</p>
+<p>If you are reading this to change apeGmsh rather than to consume its
+output, the internal specification —
+<a href="https://github.com/nmorabowen/apeGmsh/blob/main/architecture/h5-schema.md"><code>architecture/h5-schema.md</code></a>
+— covers all three zones and every record group. This page covers the
+consumer-facing subset, in more detail, and is machine-checked.</p>
+<div class="admonition info">
+<p class="admonition-title">The contract lives in one place</p>
+<p>The authoritative, machine-readable inventory is
+<a href="https://github.com/nmorabowen/apeGmsh/blob/main/tests/fixtures/neutral_zone/inventory.py"><code>tests/fixtures/neutral_zone/inventory.py</code></a>.
+This page is prose about that table. <code>tests/mesh/test_neutral_zone_schema_note.py</code>
+holds all three artifacts together: it fails when the emitter drifts
+from the inventory, and when this page drifts from the inventory.
+If they ever disagree, the inventory wins and this page is the thing
+to fix.</p>
+</div>
+<h2 id="who-writes-it">Who writes it<a class="headerlink" href="#who-writes-it" title="Permanent link">&para;</a></h2>
+<p>Two calls produce the neutral zone, byte-identically:</p>
+<ul>
+<li><code>fem.to_h5(path)</code> — broker-only. Neutral zone and nothing else. No
+  <code>/opensees/</code> group, which is the correct "no solver was involved"
+  signal.</li>
+<li><code>apeSees(fem).h5(path)</code> — composed. The same neutral zone, with the
+  OpenSees enrichment layered under <code>/opensees/</code>.</li>
+</ul>
+<p>A consumer of this page never needs to tell the two apart. Read the
+neutral zone; ignore what else is in the file.</p>
+<h2 id="version-rule">Version rule<a class="headerlink" href="#version-rule" title="Permanent link">&para;</a></h2>
+<p><strong>Read this before reading any data.</strong> Getting it wrong is the one
+mistake that produces plausible-looking garbage instead of an error.</p>
+<p>Versions are <strong>semver strings</strong>, not integers — <code>"2.35.0"</code>, stored as
+HDF5 variable-length UTF-8 string attributes. Each zone carries its own
+independent version; they do not share a number.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute on <code>/meta</code></th>
+<th>Gates</th>
+<th>Authoritative?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>neutral_schema_version</code></td>
+<td>everything on this page</td>
+<td><strong>yes</strong></td>
+</tr>
+<tr>
+<td><code>opensees_schema_version</code></td>
+<td>the <code>/opensees/</code> zone</td>
+<td>yes, for that zone</td>
+</tr>
+<tr>
+<td><code>schema_version</code></td>
+<td>—</td>
+<td><strong>no</strong> — legacy envelope</td>
+</tr>
+</tbody>
+</table>
+<p>The neutral zone is gated by <strong><code>neutral_schema_version</code> alone</strong>. At the
+time of writing the writer stamps <code>2.35.0</code>.</p>
+<p><code>schema_version</code> is a back-compatibility envelope that predates the
+per-zone split. Its value is "whichever writer wrote last" — the
+composer may overwrite it. <strong>Do not branch on it.</strong> Use it only as a
+fallback when <code>neutral_schema_version</code> is absent entirely, which means
+the file predates the split.</p>
+<p>Note that a broker-only file still stamps <code>opensees_schema_version</code>,
+even though it has no <code>/opensees/</code> group. Its presence is not evidence
+that a solver zone exists; check for the group.</p>
+<h3 id="the-floor-rule">The floor rule<a class="headerlink" href="#the-floor-rule" title="Permanent link">&para;</a></h3>
+<p>A reader declares the version it was written against, <code>R</code>, and the
+oldest version it still understands, its floor <code>L</code>. Given a file at <code>F</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>F.major != R.major</code></td>
+<td><strong>refuse</strong></td>
+</tr>
+<tr>
+<td><code>F.minor &lt; L.minor</code></td>
+<td><strong>refuse</strong> — too old</td>
+</tr>
+<tr>
+<td><code>L.minor &lt;= F.minor &lt;= R.minor</code></td>
+<td>accept</td>
+</tr>
+<tr>
+<td><code>F.minor &gt; R.minor</code></td>
+<td><strong>refuse</strong> — newer than the reader</td>
+</tr>
+</tbody>
+</table>
+<p>Patch differences are always ignored.</p>
+<p>The floor for the neutral zone is <strong><code>2.10.0</code></strong>: the layout split of the
+named-index groups into two sides, the last time required content moved.
+Every neutral minor from <code>2.10</code> up to the current one opens, so a
+<code>model.h5</code> written since then keeps working in a newer reader. The
+opensees zone's floor is <code>2.12.0</code> and the results zone's is <code>1.0.0</code>.
+The floor only moves up, and only with a major bump.</p>
+<p>The rule runs <strong>backward only</strong>. A current reader opens every file from
+its floor up; a reader older than the file refuses it. There is no
+forward tolerance, and that is deliberate: a newer minor may carry
+meaning the reader cannot see, and silently rendering a model wrong is
+worse than declining to render it.</p>
+<p>So: <strong>on an unknown version, refuse visibly.</strong> Show the user the file's
+version and the range you support, floor to current. Never fall back to
+"parse what I recognise and hope". The one deviation is the apeGmsh
+viewer app, which only reads and opens a newer file of the same major
+with a single warning, because installed apps lag the library by
+design. A new reader of your own should refuse.</p>
+<p>This is the rule apeGmsh's own reader enforces, in
+<code>opensees/_internal/schema_version.py</code> (<code>validate_zone_version</code>). The
+same rule, with its own floor, governs the <code>/opensees/</code> bridge zone
+via <code>opensees_schema_version</code> and the <code>/stages/</code> results zone via
+<code>results_schema_version</code>; a consumer that later reads those zones
+applies this section unchanged, once per zone, against that zone's own
+key and floor. The decision and its reasons are in
+<a href="https://github.com/nmorabowen/apeGmsh/blob/main/architecture/decisions/0113-compatibility-is-a-floor-per-zone.md">ADR 0113</a>.</p>
+<h3 id="what-a-minor-bump-means-for-you">What a minor bump means for you<a class="headerlink" href="#what-a-minor-bump-means-for-you" title="Permanent link">&para;</a></h3>
+<p>A minor bump is <strong>additive</strong>: new datasets, new attributes, new
+optional groups. Existing required fields keep their name, dtype and
+meaning.</p>
+<p>Which gives the compatibility promise: <strong>ignore fields you do not
+recognise.</strong> A dataset or attribute appearing that this page does not
+mention is a newer apeGmsh being additive, not a corrupt file. Skip it.</p>
+<p>Two things sit outside "additive". A change to what an existing field
+<em>means</em> ships a reader shim in apeGmsh, keyed on the version that
+introduced it; the <code>ndm</code> attribute in <code>/meta</code> is the spatial dimension
+from <code>2.34.0</code> and was the mesh dimension before, and loads saved before
+<code>2.26.1</code> sit in one <code>default</code> case. A change to a required structure's
+layout is a <strong>major</strong> bump from now on. It has happened once in the
+neutral zone, as the <code>2.10.0</code> split, and that is why the floor sits
+there. A file below the floor is refused.</p>
+<h2 id="zone-map">Zone map<a class="headerlink" href="#zone-map" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>model.h5
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├── /meta                    ← this page
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├── /nodes                   ← this page
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├── /elements                ← this page
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├── /physical_groups         ← this page
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>├── /labels                  ← this page
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>├── /mesh_selections         ← this page
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>│
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├── (record groups)          neutral, but not published here
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│   /loads /masses /constraints /contacts /contact_planes
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│   /interfaces /reinforce_ties /embed_ties /rebar_elements
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│   /partitions /parts /composed_from
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>│
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>└── /opensees/               the solver bridge zone — separate version key
+</span></code></pre></div>
+<p>The record groups are part of the neutral zone and are written by the
+same writer; they carry compound dtypes whose fields change more often
+than the geometry does, so they are documented internally rather than
+published. Every one of them is <strong>omitted entirely when empty</strong>, so a
+model that declares no loads simply has no <code>/loads</code>.</p>
+<h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
+<p>Three rules hold everywhere below.</p>
+<p><strong>Absence means "not declared".</strong> Optional groups and datasets are
+omitted, never written empty as a placeholder. A missing <code>/mesh_selections</code>
+means the model had no selections — not that data was lost.</p>
+<p><strong>Strings are HDF5 variable-length UTF-8.</strong> Both string attributes and
+the string datasets use <code>H5T_STRING</code>, <code>H5T_VARIABLE</code>, <code>cset =
+H5T_CSET_UTF8</code>. There are no fixed-width string datasets in this zone.
+(h5py hands these back as <code>bytes</code> and you must decode; h5wasm gives you
+JavaScript strings.)</p>
+<p><strong>Nothing is chunked or compressed.</strong> Every dataset is contiguous with
+no filter pipeline, so a reader can slice without a decompressor.</p>
+<h2 id="meta"><code>/meta</code><a class="headerlink" href="#meta" title="Permanent link">&para;</a></h2>
+<p>Attributes only — no datasets, no children except the optional
+<code>/meta/lineage</code>. Always present.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>neutral_schema_version</code></td>
+<td>string</td>
+<td><strong>the gate for this zone.</strong> See <a href="#version-rule">Version rule</a>.</td>
+</tr>
+<tr>
+<td><code>opensees_schema_version</code></td>
+<td>string</td>
+<td>version of the <code>/opensees/</code> zone. Stamped even when that zone is absent.</td>
+</tr>
+<tr>
+<td><code>schema_version</code></td>
+<td>string</td>
+<td>legacy envelope. Non-authoritative — do not branch on it.</td>
+</tr>
+<tr>
+<td><code>apeGmsh_version</code></td>
+<td>string</td>
+<td>producing apeGmsh version. <strong>May be the empty string</strong> — <code>fem.to_h5()</code> does not fill it in.</td>
+</tr>
+<tr>
+<td><code>created_iso</code></td>
+<td>string</td>
+<td>ISO 8601 UTC timestamp of the write. The only attribute that varies between two writes of the same model.</td>
+</tr>
+<tr>
+<td><code>ndm</code></td>
+<td>int64</td>
+<td>the model's spatial dimension as declared by <code>ops.model(ndm=)</code> — never the mesh dimension: a frame of line elements declared in 2-D carries <code>2</code>. <strong><code>0</code> means "not declared"</strong> — broker-only writes (<code>fem.to_h5</code>) always pass 0, and a reader that needs a dimension must refuse it rather than guess. Files older than neutral <code>2.34.0</code> stamped the maximum element dimension instead (#1291). Note this does <strong>not</strong> change the width of <code>/nodes/coords</code>.</td>
+</tr>
+<tr>
+<td><code>ndf</code></td>
+<td>int64</td>
+<td>DOFs per node as declared by <code>ops.model(ndf=)</code>. <strong><code>0</code> means "not declared"</strong>, not "zero DOFs" — broker-only writes always pass 0.</td>
+</tr>
+<tr>
+<td><code>snapshot_id</code></td>
+<td>string</td>
+<td>hash of the <code>FEMData</code> snapshot; 32 lowercase hex characters.</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td>string</td>
+<td><strong>optional</strong>. The writing session's uuid4, in canonical 36-character form. It pairs a <code>model.h5</code> with its <code>&lt;stem&gt;.geometry.h5</code> sibling and is never hashed. Absent in files at neutral 2.34.0 or older; read it without a version gate, and treat a missing one as "pairs with nothing" (#1304).</td>
+</tr>
+<tr>
+<td><code>model_name</code></td>
+<td>string</td>
+<td>user-supplied name. May be the empty string.</td>
+</tr>
+<tr>
+<td><code>tag_span_max</code></td>
+<td>int64</td>
+<td><code>max(max_node, max_elem) - min(min_node, min_elem) + 1</code> over nodes and elements together. Sizes tag reservations when composing. <code>0</code> for an empty mesh.</td>
+</tr>
+</tbody>
+</table>
+<p>Every string attribute here is a scalar variable-length UTF-8 string;
+every integer attribute is a scalar <code>int64</code>.</p>
+<h3 id="metalineage"><code>/meta/lineage</code><a class="headerlink" href="#metalineage" title="Permanent link">&para;</a></h3>
+<p>Optional sub-group, attributes only, no datasets. Carries the
+content-hash chain.</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Present when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fem_hash</code></td>
+<td>string</td>
+<td>the neutral zone was written and the snapshot hash was computable</td>
+</tr>
+<tr>
+<td><code>model_hash</code></td>
+<td>string</td>
+<td>an <code>/opensees/</code> zone was composed onto it</td>
+</tr>
+<tr>
+<td><code>results_hash</code></td>
+<td>string</td>
+<td>this is a composed results archive</td>
+</tr>
+</tbody>
+</table>
+<p>On a broker-only file only <code>fem_hash</code> is written, and it equals
+<code>/meta</code>'s <code>snapshot_id</code>. Treat a missing <code>/meta/lineage</code> as "older file,
+no lineage recorded" — a warning at most, never a failure.</p>
+<h2 id="nodes"><code>/nodes</code><a class="headerlink" href="#nodes" title="Permanent link">&para;</a></h2>
+<p>Always present.</p>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>dtype</th>
+<th>Shape</th>
+<th>Always?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/nodes/ids</code></td>
+<td>int64</td>
+<td><code>(N,)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/nodes/coords</code></td>
+<td>float64</td>
+<td><code>(N, 3)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/nodes/module_label</code></td>
+<td>vlen UTF-8</td>
+<td><code>(N,)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/nodes/ndf</code></td>
+<td>int8</td>
+<td><code>(N,)</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>/nodes/provenance</code></td>
+<td>int8</td>
+<td><code>(N,)</code></td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>All five are row-aligned: row <code>i</code> of every dataset describes the same
+node.</p>
+<p><code>/nodes/coords</code> <strong>always has three columns</strong>, including in a 2D model
+where <code>/meta</code>'s <code>ndm</code> is 2. The third column is present and zero. Do not
+size your buffer from <code>ndm</code>.</p>
+<p><code>/nodes/module_label</code> records which composed source module each node came
+from; it is the empty string for host-owned rows, which is every row in
+an uncomposed model. It is always written, so its presence tells you
+nothing about whether the model was composed.</p>
+<p><code>/nodes/ndf</code> is the per-node DOF count, <code>0</code> meaning undeclared. It is
+absent unless the model actually declared per-node DOFs — the common
+case has no such dataset, so treat absence as "no per-node DOF
+information", not as an error.</p>
+<p><code>/nodes/provenance</code> marks how a node came to exist: <code>0</code> for a mesh node,
+<code>1</code> for a decoupled node with no element attached. Absent when the model
+has no decoupled nodes.</p>
+<h2 id="elements"><code>/elements</code><a class="headerlink" href="#elements" title="Permanent link">&para;</a></h2>
+<p>Always present as a group, <strong>even when the model has no elements</strong>. One
+sub-group per gmsh element-type alias — <code>hex8</code>, <code>tet4</code>, <code>tri3</code>,
+<code>triangle3</code>, <code>line2</code>, and so on. A type with no elements gets no
+sub-group.</p>
+<p>These aliases are gmsh's taxonomy, deliberately not OpenSees type names.
+<code>/opensees/element_meta/</code> keys the same elements by OpenSees type token;
+the two namespaces are separate on purpose.</p>
+<p>Each <code>/elements/{type}</code> group carries five attributes:</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>code</code></td>
+<td>int64</td>
+<td>gmsh element-type code</td>
+</tr>
+<tr>
+<td><code>gmsh_name</code></td>
+<td>string</td>
+<td>gmsh's human name, e.g. <code>"Tetrahedron 4"</code></td>
+</tr>
+<tr>
+<td><code>npe</code></td>
+<td>int64</td>
+<td>nodes per element — the width of <code>connectivity</code></td>
+</tr>
+<tr>
+<td><code>dim</code></td>
+<td>int64</td>
+<td>topological dimension (1 line, 2 surface, 3 volume)</td>
+</tr>
+<tr>
+<td><code>order</code></td>
+<td>int64</td>
+<td>interpolation order</td>
+</tr>
+</tbody>
+</table>
+<p>and three datasets:</p>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>dtype</th>
+<th>Shape</th>
+<th>Always?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/elements/{type}/ids</code></td>
+<td>int64</td>
+<td><code>(E,)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/elements/{type}/connectivity</code></td>
+<td>int64</td>
+<td><code>(E, npe)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/elements/{type}/module_label</code></td>
+<td>vlen UTF-8</td>
+<td><code>(E,)</code></td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p>Row-aligned, as with nodes. Node ordering within a connectivity row is
+gmsh's node ordering for that element type — take it from <code>gmsh_name</code>
+and <code>code</code>, not from a guess.</p>
+<h2 id="index-base-read-this-carefully">Index base — read this carefully<a class="headerlink" href="#index-base-read-this-carefully" title="Permanent link">&para;</a></h2>
+<p>This is where a reader most easily goes wrong, because the failure is
+usually silent and looks like a slightly scrambled mesh.</p>
+<p><strong>Ids are identifiers, not indices.</strong></p>
+<ul>
+<li><code>/nodes/ids</code> holds gmsh node tags. They are <strong>1-based</strong> and they are
+  <strong>not guaranteed contiguous or sorted</strong>. A composed model reserves tag
+  spans per module, so gaps are ordinary.</li>
+<li><code>/elements/{type}/connectivity</code> holds <strong>node ids</strong> — values that
+  appear in <code>/nodes/ids</code> — not row indices into <code>/nodes/coords</code>.</li>
+</ul>
+<p>So the reader must build the map itself:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>id_to_row = {}
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>for row, node_id in enumerate(nodes.ids):
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    id_to_row[node_id] = row
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a># a triangle's three vertex positions
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>for element_row, conn_row in enumerate(connectivity):
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    xyz = [coords[id_to_row[node_id]] for node_id in conn_row]
+</span></code></pre></div>
+<p>Subtracting 1 from every id happens to work on a simple single-part
+model, where the ids come out as exactly <code>1..N</code>. It breaks the moment
+anyone composes two modules or deletes an entity. Build the map.</p>
+<p><strong>Element ids share one numbering space across all types</strong>, and that
+space also counts elements that were never exported. In the golden
+fixture the eight hexahedra carry ids 5 through 12 — ids 1 through 4
+belong to the boundary quads that a 3D extraction dropped. Element ids
+are therefore neither 0-based, nor 1-based per type, nor dense.</p>
+<p>Which has a direct consequence for named sets, below.</p>
+<h2 id="physical_groups"><code>/physical_groups</code><a class="headerlink" href="#physical_groups" title="Permanent link">&para;</a></h2>
+<p>Optional — omitted entirely when the model declares no physical groups.</p>
+<p>Physical groups are split into <strong>two independent sides</strong>:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>/physical_groups/
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>├── node_side/{name}/
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>└── element_side/{name}/
+</span></code></pre></div>
+<p>A group declared on both composites is written into both sub-trees. A
+group that exists only on one side appears only there. <strong>Walk each side
+independently</strong>; do not infer one from the other, and do not merge them.
+Either sub-group may be absent.</p>
+<p><code>{name}</code> is the group's name with <code>/</code> replaced by <code>_</code>. If two groups
+sanitize to the same name, the second gets <code>__{dim}_{tag}</code> appended. The
+<strong>real</strong> name is always the <code>name</code> attribute — use the sub-group key
+only as a key.</p>
+<p>Each entry carries three attributes and up to three datasets:</p>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dim</code></td>
+<td>int64</td>
+<td>topological dimension of the group</td>
+</tr>
+<tr>
+<td><code>tag</code></td>
+<td>int64</td>
+<td>gmsh physical tag</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>the authoritative name</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>dtype</th>
+<th>Shape</th>
+<th>Always?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/physical_groups/node_side/{name}/node_ids</code></td>
+<td>int64</td>
+<td><code>(Np,)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/physical_groups/node_side/{name}/node_coords</code></td>
+<td>float64</td>
+<td><code>(Np, 3)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/physical_groups/element_side/{name}/node_ids</code></td>
+<td>int64</td>
+<td><code>(Np,)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/physical_groups/element_side/{name}/node_coords</code></td>
+<td>float64</td>
+<td><code>(Np, 3)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/physical_groups/element_side/{name}/element_ids</code></td>
+<td>int64</td>
+<td><code>(Ep,)</code></td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p><code>element_ids</code> appears on the element side only, and only when the group
+has <code>dim &gt;= 1</code> and a non-empty element set.</p>
+<div class="admonition warning">
+<p class="admonition-title"><code>element_ids</code> may name elements that are not in the file</p>
+<p>A physical group records the elements gmsh assigned to it. If the
+<code>FEMData</code> snapshot was extracted at a dimension that excludes them,
+those elements are <strong>not</strong> in any <code>/elements/{type}</code> group but their
+ids are still listed here.</p>
+<p>The golden fixture is built to exercise exactly this: its <code>Base</code>
+group is a face of the cube, and its <code>element_ids</code> are <code>[1, 2, 3, 4]</code>
+— quads that a <code>dim=3</code> extraction dropped. Nothing in the file
+resolves them.</p>
+<p>Resolve PG element ids <strong>defensively</strong>: skip ids you cannot find.
+The node-side membership (<code>node_ids</code> / <code>node_coords</code>) is always
+self-contained, so it is the safer thing to highlight from.</p>
+</div>
+<p>The <code>node_coords</code> datasets duplicate coordinates already in
+<code>/nodes/coords</code>. They are a convenience for readers that want a group's
+geometry without the id map; they are row-aligned with that entry's own
+<code>node_ids</code>, not with <code>/nodes/ids</code>.</p>
+<h2 id="labels"><code>/labels</code><a class="headerlink" href="#labels" title="Permanent link">&para;</a></h2>
+<p>apeGmsh's internal labels — the names given to geometry at construction
+time, as distinct from gmsh physical groups. Optional, omitted when
+there are none.</p>
+<p><strong>Structurally identical to <code>/physical_groups</code></strong> in every respect: the
+same two-sided split, the same <code>dim</code> / <code>tag</code> / <code>name</code> attributes, the
+same datasets with the same dtypes and the same optionality.</p>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>dtype</th>
+<th>Shape</th>
+<th>Always?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/labels/node_side/{name}/node_ids</code></td>
+<td>int64</td>
+<td><code>(Np,)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/labels/node_side/{name}/node_coords</code></td>
+<td>float64</td>
+<td><code>(Np, 3)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/labels/element_side/{name}/node_ids</code></td>
+<td>int64</td>
+<td><code>(Np,)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/labels/element_side/{name}/node_coords</code></td>
+<td>float64</td>
+<td><code>(Np, 3)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/labels/element_side/{name}/element_ids</code></td>
+<td>int64</td>
+<td><code>(Ep,)</code></td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>A single reader function should handle <code>/physical_groups/node_side</code>,
+<code>/physical_groups/element_side</code>, <code>/labels/node_side</code> and
+<code>/labels/element_side</code> — they differ only in what they mean, not in how
+they are laid out.</p>
+<h2 id="mesh_selections"><code>/mesh_selections</code><a class="headerlink" href="#mesh_selections" title="Permanent link">&para;</a></h2>
+<p>Post-mesh selection sets. Optional — omitted when the model has no
+selection store or the store is empty.</p>
+<p><strong>This group is flat.</strong> It has no <code>node_side</code> / <code>element_side</code> split;
+entries live directly under <code>/mesh_selections/{name}</code>. Selections are a
+single store with no notion of sides, so there was nothing to split. Do
+not reuse the named-index walker here without accounting for the missing
+level.</p>
+<p>Same three attributes as a named-index entry — <code>dim</code>, <code>tag</code>, <code>name</code> —
+where <code>dim</code> is <code>0</code> for a node-level selection.</p>
+<table>
+<thead>
+<tr>
+<th>Dataset</th>
+<th>dtype</th>
+<th>Shape</th>
+<th>Always?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/mesh_selections/{name}/node_ids</code></td>
+<td>int64</td>
+<td><code>(Np,)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/mesh_selections/{name}/node_coords</code></td>
+<td>float64</td>
+<td><code>(Np, 3)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>/mesh_selections/{name}/element_ids</code></td>
+<td>int64</td>
+<td><code>(Ep,)</code></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>/mesh_selections/{name}/connectivity</code></td>
+<td>int64</td>
+<td><code>(Ep, npe)</code></td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p><code>element_ids</code> and <code>connectivity</code> are written together, for <code>dim &gt;= 1</code>
+selections with a non-empty element set — either both are present or
+neither is. <code>connectivity</code> rows align 1:1 with <code>element_ids</code>, and hold
+node ids on the same terms as <code>/elements/{type}/connectivity</code>.</p>
+<h2 id="what-is-always-there">What is always there<a class="headerlink" href="#what-is-always-there" title="Permanent link">&para;</a></h2>
+<p>The minimum a valid neutral zone guarantees:</p>
+<ul>
+<li><code>/meta</code>, with <code>neutral_schema_version</code>, <code>ndm</code>, <code>ndf</code>, <code>snapshot_id</code>,
+  <code>tag_span_max</code>, and possibly-empty <code>apeGmsh_version</code> / <code>model_name</code>.</li>
+<li><code>/nodes</code>, with <code>ids</code>, <code>coords</code> and <code>module_label</code>.</li>
+<li><code>/elements</code> as a group — possibly with no children.</li>
+</ul>
+<p>Everything else on this page is conditional. A reader that handles a
+file containing only those three has handled the degenerate case
+correctly.</p>
+<h2 id="for-consumers">For consumers<a class="headerlink" href="#for-consumers" title="Permanent link">&para;</a></h2>
+<p><strong>Ignore what you do not recognise.</strong> Minor versions add datasets,
+attributes and groups. Encountering one this page does not describe
+means you are reading a newer file, not a broken one. Skip it and carry
+on.</p>
+<p><strong>Refuse what you cannot understand.</strong> The corollary. If
+<code>neutral_schema_version</code> falls outside your supported range, stop and
+say so, showing the file's version and that range. Do not
+partially render.</p>
+<p><strong>Check yourself against the golden.</strong> The conformance artifact is
+<a href="https://github.com/nmorabowen/apeGmsh/blob/main/tests/fixtures/neutral_zone/box.h5"><code>tests/fixtures/neutral_zone/box.h5</code></a>
+— a 41 KB unit cube, 27 nodes and 8 hexahedra, deterministic, with two
+physical groups on both sides, a label, and a flat mesh selection. It is
+built to exercise the awkward parts: non-contiguous element ids, and a
+physical group whose <code>element_ids</code> do not resolve. Vendor it into your
+own test suite and read it there.</p>
+<p>It is regenerated by
+<a href="https://github.com/nmorabowen/apeGmsh/blob/main/tests/fixtures/neutral_zone/_generate_fixtures.py"><code>tests/fixtures/neutral_zone/_generate_fixtures.py</code></a>,
+so the bytes are reproducible from the repo's own API rather than
+hand-rolled.</p>
+<p><strong>A checklist for a new reader</strong>, in the order the mistakes happen:</p>
+<ol>
+<li>Read <code>/meta</code>'s <code>neutral_schema_version</code>; check it against your floor
+   and your own version; refuse loudly if outside them.</li>
+<li>Read <code>/nodes/ids</code> and <code>/nodes/coords</code>; build the id → row map.</li>
+<li>Read each <code>/elements/{type}</code>; resolve connectivity <strong>through the
+   map</strong>, not by subtracting 1.</li>
+<li>Size vertex buffers at three components per node, whatever <code>ndm</code>
+   says.</li>
+<li>Walk the named-index sides independently; take names from the <code>name</code>
+   attribute.</li>
+<li>Resolve physical-group <code>element_ids</code> defensively; expect some to
+   dangle.</li>
+<li>Treat every optional dataset's absence as information, not failure.</li>
+</ol>
+<hr />
+<p><em>See also: <a href="../broker/">The broker</a> — how a session's declarations become
+the frozen <code>FEMData</code> snapshot this file serialises.</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

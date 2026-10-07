@@ -1017,6 +1017,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -1094,6 +1098,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../how-to/author-a-section-document/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Author a section document
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../how-to/export-script/" class="md-nav__link">
         
   
@@ -1143,6 +1175,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-to/footfall-vibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluate footfall vibration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1159,6 +1219,10 @@
   
     
     
+      
+        
+      
+        
       
         
       
@@ -1243,6 +1307,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../how-to/render-a-still/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Render a deformed shape or contour
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../how-to/results-mpco/" class="md-nav__link">
         
   
@@ -1279,6 +1371,34 @@
     
   
     Choose a results strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how-to/studio-habitat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Drive Studio / MCP habitat
   
 
     
@@ -1874,6 +1994,8 @@
       
         
       
+        
+      
     
     
     
@@ -1959,6 +2081,34 @@
     
   
     The OpenSees bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/backend-capabilities/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend capabilities
   
 
     
@@ -2535,6 +2685,8 @@
       
         
       
+        
+      
     
     
     
@@ -2729,6 +2881,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="model-h5-neutral-zone/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The model.h5 neutral zone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2831,34 +3011,6 @@
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../api-flows/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    API Flow Atlas
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
               
             
               
@@ -3176,6 +3328,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api/results-session/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Results session
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/selection/" class="md-nav__link">
         
   
@@ -3360,7 +3540,7 @@ predict the library's behavior from its architecture rather than its docs.</p>
 <a href="../concepts/">Concepts</a> pages teach the same systems from the
 outside. Come back when a question starts with "why is it built this way" or
 "where would I change this."</p>
-<p>Four pages cover the load-bearing internals, in reading order:
+<p>Five pages cover the load-bearing internals, in reading order:
 <a href="architecture/">Architecture</a> — the layers and the data flow;
 <a href="principles/">Principles</a> — the commitments every change is measured
 against; <a href="broker/">The broker</a> — how declarations become the frozen
@@ -3368,9 +3548,14 @@ against; <a href="broker/">The broker</a> — how declarations become the frozen
 instancing registry and fragmentation bookkeeping; and
 <a href="results/">Results internals</a> — the three-broker read side and the
 render seam.</p>
+<p>A sixth page faces outward rather than inward:
+<a href="model-h5-neutral-zone/">The <code>model.h5</code> neutral zone</a> publishes the
+on-disk model layout — dataset by dataset, with its version rule and a
+golden fixture — as a contract for tools that read apeGmsh's output
+without importing apeGmsh.</p>
 <p>The authoritative record of <em>decisions</em> — what was chosen, what was
 rejected, and why — is the append-only ADR log in the repository at
-<a href="https://github.com/nmorabowen/apeGmsh/tree/main/src/apeGmsh/opensees/architecture/decisions"><code>src/apeGmsh/opensees/architecture/decisions/</code></a>.
+<a href="https://github.com/nmorabowen/apeGmsh/tree/main/architecture/decisions"><code>architecture/decisions/</code></a>.
 These pages cite ADRs by number; the log is where you read them.</p>
 <hr />
 <p><em>Next: <a href="architecture/">Architecture</a>.</em></p>
