@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -764,14 +764,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../how-to/compose-modules/" class="md-nav__link">
+      <a href="../../how-to/assemble-saved-models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Compose modules
+    Assemble saved models
   
 
     
@@ -3925,19 +3925,18 @@ explicitly. The mechanics, options, and gotchas are in
 is in the <a href="../../api/fem/">FEMData reference</a>.</p>
 <h2 id="composition-over-snapshots">Composition over snapshots<a class="headerlink" href="#composition-over-snapshots" title="Permanent link">&para;</a></h2>
 <p>Persistence makes one more thing possible: building <em>with</em> snapshots.
-<code>apeGmsh.from_h5("host.h5")</code> reopens a saved model as a session with no
-Gmsh kernel at all — geometry and meshing are gone, and what remains is
-exactly what operates on frozen data: <code>g.compose(...)</code> grafts further saved
-modules into the model, interface constraints couple the already-meshed
-regions, and <code>g.save(...)</code> writes the assembly out again. Each composed
-module leaves a provenance record on the result (<code>fem.composed_from</code>), and
-every merged node and element remembers which module it came from — so even
-a many-module assembly can trace each row to its source.</p>
+An <code>Assembly</code> places saved <code>model.h5</code> files as named instances, ties them
+across their already-meshed interfaces, and <code>bridge()</code> merges every
+instance's snapshot into one broker — no Gmsh kernel is involved, because
+what remains is exactly what operates on frozen data. Each instance leaves
+a provenance record on the result (<code>fem.composed_from</code>), and every merged
+node and element remembers which instance it came from — so even a
+many-instance assembly can trace each row to its source.</p>
 <p>This is the immutability argument completing itself. Snapshots compose
 <em>because</em> they are frozen: merging two live Gmsh sessions would mean
 reconciling two mutable tag spaces, but merging two snapshots is arithmetic
 on plain data. The recipe is in
-<a href="../../how-to/compose-modules/">Compose modules</a>; the concept to keep is that
+<a href="../../how-to/assemble-saved-models/">Assemble saved models</a>; the concept to keep is that
 <code>FEMData</code> is not just the session's output — it is a first-class building
 block in its own right.</p>
 <hr />
@@ -3997,10 +3996,10 @@ block in its own right.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

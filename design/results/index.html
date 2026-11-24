@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -764,14 +764,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../how-to/compose-modules/" class="md-nav__link">
+      <a href="../../how-to/assemble-saved-models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Compose modules
+    Assemble saved models
   
 
     
@@ -3777,32 +3777,45 @@ the type level — numpy and dataclasses only.</p>
 <p>That frozenness is the seam: <strong>anything that can walk a spec is a valid
 execution strategy</strong>, and the strategies are just its consumers.</p>
 <ul>
-<li><strong>Script emission</strong> — <code>to_tcl_commands()</code> / <code>to_python_commands()</code>
-  translate each record into <code>recorder Node …</code> / <code>recorder Element …</code>
-  source inlined into an exported deck; the user runs OpenSees
-  elsewhere and the spec doubles as the manifest for parsing the output.</li>
-<li><strong>Live recorders</strong> — <code>spec.emit_recorders(out_dir)</code> pushes the same
+<li><strong>Script emission</strong> — <code>to_tcl_commands(model=model)</code> /
+  <code>to_python_commands(model=model)</code> translate each record into
+  <code>recorder Node …</code> / <code>recorder Element …</code> source inlined into an
+  exported deck; the user runs OpenSees elsewhere and the spec doubles
+  as the manifest for parsing the output. The built model is required:
+  it maps element ids to OpenSees tags and each node's DOFs to its own
+  layout (a 2-D frame's <code>rotation_z</code> is DOF 3).</li>
+<li><strong>Live recorders</strong> — <code>spec.emit_recorders(out_dir, model=model)</code> pushes the same
   commands into the running openseespy domain via <code>ops.recorder(*args)</code>,
   with a per-stage filename prefix (<code>&lt;stage&gt;__…</code>) so multi-stage runs
   don't collide.</li>
 <li><strong>Live MPCO</strong> — <code>spec.emit_mpco(path)</code> issues one in-process
   <code>recorder mpco</code> call, with a build-gate at <code>__enter__</code> that raises
   with a remediation pointer when the active build lacks the recorder.</li>
-<li><strong>Domain capture</strong> — the native path. This one grew its own
-  declarative class, <code>DomainCaptureSpec</code>, resolved on the bridge:
-  <code>ops.domain_capture(spec, path=...)</code> returns a <code>DomainCapture</code>
-  context manager that queries the live domain (<code>ops.nodeDisp</code>,
-  <code>ops.eleResponse</code>, …) on each <code>cap.step()</code>, buffers in RAM, and
-  flushes chunked writes through <code>NativeWriter</code> at stage end.
-  <code>capture_modes()</code> runs the eigen analysis and writes one stage per
-  mode. The bridge is forwarded through so the capture file gets its
-  <code>/opensees/</code> zone composed in — the Composed-file pattern again.</li>
+<li><strong>Default route</strong> — <code>spec.emit_default(path, model_h5=...)</code> returns
+  a <code>LiveDefault</code> context manager that asks the bound module what it is
+  at <code>__enter__</code> and picks one of the three strategies above: the fork's
+  own <code>.ladruno</code> recorder (stamped with <code>model_h5</code>'s pairing, read with
+  <code>Results.from_ladruno</code>), a live MPCO recorder on a stock build that
+  has one (converted to <code>.ladruno</code> beside it and read with
+  <code>Results.from_ladruno</code>), or live classic recorders over one stage (read
+  with <code>Results.from_recorders</code>, after one <code>DefaultRouteWarning</code>). The
+  MPCO route converts only when the stage kinds are facts, declared in
+  <code>ops.stage</code> blocks; otherwise it refuses by name at <code>__enter__</code>, with
+  no default kind. <code>read_deck_mpco</code> follows the same rule for a deck's
+  <code>.mpco</code>, where an unstaged deck's run record can also make the kind a
+  fact. <code>run.results()</code> opens whichever file the route wrote. Modal records have no default route:
+  modes come from <code>EigenResult.to_native()</code> / <code>.results()</code> on stock, and
+  from the fork's <code>.ladruno</code> on the fork.</li>
 </ul>
 <p>Text and live emission cannot drift apart because they share one core.
 <code>emit_logical()</code> turns a resolved record into <code>LogicalRecorder</code>
-values — one classic recorder command in structured form — and
-<code>format_tcl</code> / <code>format_python</code> / <code>to_ops_args</code> are three renderings of
-the same object (with <code>mpco_ops_args</code> playing the same role for MPCO).
+values — one classic recorder command in structured form, with element
+ids as FEM ids and node DOFs as spatial slots, which is what the read
+side keys on. <code>to_deck()</code> maps that object to what reaches OpenSees,
+using the built model: element tags, and each slot at the DOF the nodes
+carry it. <code>format_tcl</code> / <code>format_python</code> / <code>to_ops_args</code> are three
+renderings of the mapped object (with <code>mpco_ops_args</code> playing the same
+role for MPCO).
 Cross-check tests assert the source-code form and the live-args form
 agree, so a change to recorder argument shape lands in one place.</p>
 <h2 id="readers-and-the-slab-pipeline">Readers and the slab pipeline<a class="headerlink" href="#readers-and-the-slab-pipeline" title="Permanent link">&para;</a></h2>
@@ -4049,10 +4062,10 @@ layers on the other side of the seam.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

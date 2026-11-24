@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.2">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -766,14 +766,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../compose-modules/" class="md-nav__link">
+      <a href="../assemble-saved-models/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Compose modules
+    Assemble saved models
   
 
     
@@ -3723,7 +3723,17 @@ load patterns, and any MP constraints (<code>equalDOF</code>, <code>rigidLink</c
   internally (an implicit <code>ops.build()</code>), so order between them doesn't matter.</li>
 <li><strong><code>run=True</code> subprocesses the deck for you.</strong> <code>ops.tcl("m.tcl", run=True)</code>
   shells out to an <code>opensees</code> binary (override with <code>bin=</code>); <code>ops.py(..., run=True)</code>
-  runs the script under Python. Without <code>run=</code>, the call only writes the file.</li>
+  runs the script under Python. Without <code>run=</code>, the call only writes the file.
+  A run that finishes returns a frozen <code>RunReport</code>; one that does not raises
+  <code>RuntimeError</code> carrying the log tail and path. That includes a Tcl <code>error</code>
+  (the deck's aborted-analyze guard), because <code>OpenSees.exe</code> exits 0 after one.
+  The report has <code>returncode</code>, <code>log</code> (the absolute path of the tee'd log,
+  <code>&lt;deck&gt;.log</code> unless <code>log=</code> says otherwise), <code>elapsed_s</code>, <code>increments</code> and
+  <code>solver_stats</code>. <code>increments</code> counts the analyze increments the deck's progress
+  markers prove complete, and is <code>None</code> when <code>progress=False</code> or when the
+  markers do not add up to the deck's own loops (several processes under an
+  <code>mpiexec</code> wrapper, say). <code>solver_stats</code> is set only when a solver was asked
+  for <code>-stats</code>.</li>
 <li><strong>Loads are opt-in.</strong> <code>g.loads.*</code> do <strong>not</strong> auto-emit (ADR 0051): bring a
   session load case into the deck with <code>p.from_model(case)</code> inside a pattern,
   or author one directly with <code>pat.load(...)</code>. The deck is authoritative — a
@@ -3799,10 +3809,10 @@ load patterns, and any MP constraints (<code>equalDOF</code>, <code>rigidLink</c
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.indexes", "toc.follow", "content.code.copy", "content.code.annotate", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>
